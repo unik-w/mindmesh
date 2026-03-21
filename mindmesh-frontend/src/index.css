@@ -4,18 +4,18 @@
   --font-sans: 'DM Sans', system-ui, sans-serif;
   --font-display: 'Outfit', 'DM Sans', system-ui, sans-serif;
 
-  --color-canvas: #fbfaf8;
-  --color-canvas-muted: #f3f1ed;
+  --color-canvas: #f8fafc;
+  --color-canvas-muted: #f1f5f9;
   --color-surface: #ffffff;
-  --color-border: #e8e4de;
-  --color-border-focus: #d4cec4;
-  --color-foreground: #5c5852;
-  --color-heading: #1a1814;
-  --color-muted: #8a847a;
-  --color-accent: #c45c26;
-  --color-accent-hover: #a84d1f;
-  --color-accent-soft: rgba(196, 92, 38, 0.1);
-  --color-accent-text: #9a4518;
+  --color-border: #e2e8f0;
+  --color-border-focus: #94a3b8;
+  --color-foreground: #475569;
+  --color-heading: #0f172a;
+  --color-muted: #64748b;
+  --color-accent: #6366f1;
+  --color-accent-hover: #4f46e5;
+  --color-accent-soft: rgba(99, 102, 241, 0.18);
+  --color-accent-text: #7c3aed;
 }
 
 @layer base {
