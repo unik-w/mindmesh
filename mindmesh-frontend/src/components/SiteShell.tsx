@@ -4,7 +4,7 @@ import { btnPrimary, wrap } from '../uiClasses'
 const navLinks = [
   { to: '/#product', label: 'Product' },
   { to: '/#sessions', label: 'Sessions' },
-  { to: '/discover', label: 'Get started' },
+  // { to: '/discover', label: 'Get started' },
 ] as const
 
 export function SiteShell({ children }: { children: React.ReactNode }) {

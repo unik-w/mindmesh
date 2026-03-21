@@ -3,6 +3,7 @@ import DiscoverPage from './pages/DiscoverPage'
 import HomePage from './pages/HomePage'
 import ProfilePage from './pages/ProfilePage'
 
+
 export default function App() {
   return (
     <BrowserRouter>

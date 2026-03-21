@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { signOut } from 'firebase/auth'
 import { Link, useNavigate } from 'react-router-dom'
 import { SiteShell } from '../components/SiteShell'
+import { auth } from '../firebase'
 import {
   demoProfile,
   demoSponsoredResearches,
@@ -89,8 +91,13 @@ export default function ProfilePage() {
     persist({ ...stored, googleScholarUrl: null })
   }
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     localStorage.removeItem(STORAGE_KEY)
+    try {
+      await signOut(auth)
+    } catch {
+      /* ignore */
+    }
     navigate('/')
   }
 
