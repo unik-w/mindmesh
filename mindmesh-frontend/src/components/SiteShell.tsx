@@ -50,7 +50,9 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <div className="relative z-10 flex flex-1 flex-col">{children}</div>
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+        {children}
+      </div>
 
       <footer className="relative z-10 mt-auto shrink-0 border-t border-border py-[22px] pb-9">
         <div
