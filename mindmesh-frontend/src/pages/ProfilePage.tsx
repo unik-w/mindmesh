@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { signOut } from 'firebase/auth'
+import { onAuthStateChanged, signOut, type User } from 'firebase/auth'
 import { Link, useNavigate } from 'react-router-dom'
 import { SiteShell } from '../components/SiteShell'
 import { auth } from '../firebase'
@@ -53,16 +53,38 @@ function isLikelyScholarUrl(s: string) {
   }
 }
 
+function profileInitials(user: User | null, fallback: string): string {
+  if (!user) return fallback.slice(0, 2).toUpperCase()
+  const name = user.displayName?.trim()
+  if (name) {
+    const parts = name.split(/\s+/).filter(Boolean)
+    if (parts.length >= 2) {
+      return `${parts[0]![0]!}${parts[parts.length - 1]![0]!}`.toUpperCase()
+    }
+    return name.slice(0, 2).toUpperCase()
+  }
+  const local = user.email?.split('@')[0] ?? '?'
+  return local.slice(0, 2).toUpperCase()
+}
+
 export default function ProfilePage() {
   const navigate = useNavigate()
+  const [authUser, setAuthUser] = useState<User | null>(null)
   const [stored, setStored] = useState<StoredProfile>(() => loadStored())
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<StoredProfile>(() => loadStored())
   const [scholarInput, setScholarInput] = useState('')
 
   useEffect(() => {
+    return onAuthStateChanged(auth, setAuthUser)
+  }, [])
+
+  useEffect(() => {
     setDraft(stored)
   }, [stored])
+
+  const accountEmail =
+    authUser?.email?.trim() || stored.email || demoProfile.email
 
   const persist = useCallback((next: StoredProfile) => {
     setStored(next)
@@ -70,7 +92,10 @@ export default function ProfilePage() {
   }, [])
 
   const handleSaveProfile = () => {
-    persist(draft)
+    persist({
+      ...draft,
+      email: authUser?.email?.trim() || draft.email,
+    })
     setEditing(false)
   }
 
@@ -164,18 +189,27 @@ export default function ProfilePage() {
           <section className="mb-6 rounded-2xl border border-border bg-white p-6 shadow-sm shadow-slate-200/40">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="flex min-w-0 items-center gap-4">
-                <span
-                  className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-cyan-500 to-violet-600 text-lg font-bold text-white shadow-md"
-                  aria-hidden
-                >
-                  {demoProfile.initials}
-                </span>
+                {authUser?.photoURL ? (
+                  <img
+                    src={authUser.photoURL}
+                    alt=""
+                    className="size-14 shrink-0 rounded-2xl object-cover shadow-md"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <span
+                    className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-cyan-500 to-violet-600 text-lg font-bold text-white shadow-md"
+                    aria-hidden
+                  >
+                    {profileInitials(authUser, demoProfile.initials)}
+                  </span>
+                )}
                 <div className="min-w-0">
                   <h2 className="m-0 text-lg font-semibold text-heading">
                     {display.fullName}
                   </h2>
                   <p className="m-0 mt-0.5 truncate text-sm text-muted">
-                    @{demoProfile.username}
+                    {accountEmail}
                   </p>
                 </div>
               </div>
@@ -226,26 +260,20 @@ export default function ProfilePage() {
                   </p>
                 )}
               </label>
-              <label className="block">
+              <div className="block">
                 <span className="mb-1.5 block text-xs font-medium text-muted">
                   Email
                 </span>
-                {editing ? (
-                  <input
-                    type="email"
-                    autoComplete="email"
-                    value={draft.email}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, email: e.target.value }))
-                    }
-                    className="w-full rounded-xl border border-border bg-white px-3 py-2.5 text-sm outline-none ring-violet-400/40 focus-visible:ring-2"
-                  />
-                ) : (
-                  <p className="m-0 rounded-xl border border-transparent bg-slate-50/80 px-3 py-2.5 text-sm text-foreground">
-                    {stored.email}
+                <p className="m-0 rounded-xl border border-transparent bg-slate-50/80 px-3 py-2.5 text-sm text-foreground wrap-anywhere">
+                  {accountEmail}
+                </p>
+                {authUser?.email ? (
+                  <p className="mt-1.5 mb-0 text-xs text-muted">
+                    This address comes from your Google account and cannot be
+                    changed here.
                   </p>
-                )}
-              </label>
+                ) : null}
+              </div>
               <label className="block sm:col-span-2">
                 <span className="mb-1.5 block text-xs font-medium text-muted">
                   Affiliation

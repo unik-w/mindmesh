@@ -40,6 +40,7 @@ import {
   sidebarNavBtnIdle,
 } from './discover/discoverNavStyles'
 import { interleaveFeedPromos } from './discover/feedPromos'
+import { relatedPapersFor } from './discover/relatedPapers'
 import type { FeedItem, MainPanel, NewSessionModalStep } from './discover/types'
 import {
   IconAuthor,
@@ -50,6 +51,19 @@ import {
   SidebarNavIconDiscover,
   SidebarNavIconSearch,
 } from './discover/icons'
+
+function accountInitials(user: User): string {
+  const name = user.displayName?.trim()
+  if (name) {
+    const parts = name.split(/\s+/).filter(Boolean)
+    if (parts.length >= 2) {
+      return `${parts[0]![0]!}${parts[parts.length - 1]![0]!}`.toUpperCase()
+    }
+    return name.slice(0, 2).toUpperCase()
+  }
+  const local = user.email?.split('@')[0] ?? '?'
+  return local.slice(0, 2).toUpperCase()
+}
 
 export default function DiscoverPage() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
@@ -66,6 +80,8 @@ export default function DiscoverPage() {
   const [paperQuery, setPaperQuery] = useState('')
   const [pdfLabel, setPdfLabel] = useState<string | null>(null)
   const pdfInputRef = useRef<HTMLInputElement>(null)
+  const accountMenuRef = useRef<HTMLDivElement>(null)
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false)
 
   const [likedPosts, setLikedPosts] = useState<Record<string, boolean>>({})
   const [commentsOpenPostId, setCommentsOpenPostId] = useState<string | null>(
@@ -182,12 +198,30 @@ export default function DiscoverPage() {
   }, [])
 
   const handleLogout = useCallback(async () => {
+    setAccountMenuOpen(false)
     try {
       await signOut(auth)
     } catch {
       /* ignore */
     }
   }, [])
+
+  useEffect(() => {
+    if (!accountMenuOpen) return
+    const onDoc = (e: MouseEvent) => {
+      const el = accountMenuRef.current
+      if (el && !el.contains(e.target as Node)) setAccountMenuOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setAccountMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [accountMenuOpen])
 
   const closeNewSessionModal = useCallback(() => {
     setNewSessionOpen(false)
@@ -221,6 +255,17 @@ export default function DiscoverPage() {
       .sort((a, b) => Number(b.match) - Number(a.match))
       .map((s) => s.item)
   }, [selected, activeSessionId])
+
+  const relatedPaperPool = useMemo(() => {
+    const byId = new Map<string, (typeof feedItems)[number]>()
+    for (const p of feedItems) byId.set(p.id, p)
+    for (const s of sessions) {
+      for (const p of s.papers) {
+        byId.set(p.id, p)
+      }
+    }
+    return [...byId.values()]
+  }, [])
 
   const feedWithPromos = useMemo(() => {
     const selectedKey = [...selected].sort().join(',')
@@ -386,6 +431,14 @@ export default function DiscoverPage() {
       </div>
     ) : null
 
+  const sheetRelatedPapers = useMemo(
+    () =>
+      paperSheetPost
+        ? relatedPapersFor(paperSheetPost, relatedPaperPool, 3)
+        : [],
+    [paperSheetPost, relatedPaperPool],
+  )
+
   const paperSheetModal =
     phase === 'done' && paperSheetPost ? (
       <div className="fixed inset-0 z-10002 flex items-end justify-center sm:items-center sm:p-4">
@@ -537,6 +590,45 @@ export default function DiscoverPage() {
                 </a>
               </p>
             </section>
+
+            {sheetRelatedPapers.length > 0 ? (
+              <section
+                className="mt-8 pb-2"
+                aria-labelledby="related-papers-heading"
+              >
+                <h3
+                  id="related-papers-heading"
+                  className="m-0 text-[0.8125rem] font-semibold tracking-wide text-slate-800"
+                >
+                  Related research papers
+                </h3>
+                <ul className="m-0 mt-3 list-none space-y-4 border-t border-slate-100 pt-4 p-0">
+                  {sheetRelatedPapers.map((rel) => (
+                    <li
+                      key={rel.id}
+                      className="rounded-xl border border-slate-200/80 bg-slate-50/80 px-4 py-3"
+                    >
+                      <a
+                        href={arxivAbsUrl(rel)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group block no-underline"
+                      >
+                        <span className="text-[0.95rem] font-semibold leading-snug text-slate-900 transition-colors group-hover:text-violet-700 wrap-anywhere">
+                          {rel.title}
+                        </span>
+                        <span className="mt-1 block text-[0.8125rem] leading-snug text-slate-500 wrap-anywhere">
+                          {rel.authorLine}
+                        </span>
+                        <span className="mt-2 inline-block text-[0.75rem] font-medium text-violet-600 group-hover:underline">
+                          View on arXiv
+                        </span>
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
           </div>
         </div>
       </div>
@@ -924,29 +1016,76 @@ export default function DiscoverPage() {
                 </ul>
               </div>
 
-              <div className="mt-auto space-y-2 border-t border-slate-300/50 p-2">
+              <div
+                ref={accountMenuRef}
+                className="relative mt-auto border-t border-slate-300/50 p-2"
+              >
+                {accountMenuOpen && authUser ? (
+                  <div
+                    role="menu"
+                    aria-label="Account"
+                    className="absolute right-0 bottom-full left-0 z-50 mb-1.5 overflow-hidden rounded-xl border border-slate-200/90 bg-white py-1 shadow-lg shadow-slate-400/20 ring-1 ring-white/90"
+                  >
+                    <Link
+                      role="menuitem"
+                      to="/profile"
+                      onClick={() => setAccountMenuOpen(false)}
+                      className={`${btnBase} w-full justify-start rounded-none border-0 px-3 py-2.5 text-left text-[0.8125rem] font-medium text-slate-800 no-underline hover:bg-slate-100`}
+                    >
+                      Profile
+                    </Link>
+                    <button
+                      role="menuitem"
+                      type="button"
+                      onClick={() => void handleLogout()}
+                      className={`${btnBase} w-full justify-start rounded-none border-0 px-3 py-2.5 text-left text-[0.8125rem] font-medium text-red-700 hover:bg-red-50`}
+                    >
+                      Log out
+                    </button>
+                  </div>
+                ) : null}
                 <button
                   type="button"
-                  onClick={handleLogout}
-                  className={`${btnBase} w-full justify-center border border-slate-200/90 bg-white/90 px-3 py-2 text-[0.8125rem] font-medium text-slate-600 shadow-sm hover:bg-white hover:text-slate-800`}
+                  aria-expanded={accountMenuOpen}
+                  aria-haspopup="menu"
+                  onClick={() => setAccountMenuOpen((o) => !o)}
+                  className="flex w-full items-center gap-2.5 rounded-xl border border-slate-200/90 bg-white/95 px-2.5 py-2 text-left shadow-md shadow-slate-300/25 ring-1 ring-white/80 transition-colors outline-none hover:bg-white focus-visible:ring-2 focus-visible:ring-violet-400/50"
                 >
-                  Log out
-                </button>
-                <Link
-                  to="/profile"
-                  className="flex w-full items-center gap-2.5 rounded-xl border border-slate-200/90 bg-white/95 px-2.5 py-2 shadow-md shadow-slate-300/25 ring-1 ring-white/80 transition-colors outline-none hover:bg-white focus-visible:ring-2 focus-visible:ring-violet-400/50 no-underline"
-                  aria-label={`Open profile for @${demoProfile.username}`}
-                >
-                  <span
-                    className="flex size-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-cyan-500 to-violet-600 text-[0.65rem] font-bold text-white shadow-sm"
+                  {authUser?.photoURL ? (
+                    <img
+                      src={authUser.photoURL}
+                      alt=""
+                      className="size-8 shrink-0 rounded-full object-cover shadow-sm"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span
+                      className="flex size-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-cyan-500 to-violet-600 text-[0.65rem] font-bold text-white shadow-sm"
+                      aria-hidden
+                    >
+                      {authUser
+                        ? accountInitials(authUser)
+                        : demoProfile.initials}
+                    </span>
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-[0.8125rem] font-semibold text-slate-800">
+                    {authUser?.displayName?.trim() ||
+                      authUser?.email?.split('@')[0] ||
+                      `@${demoProfile.username}`}
+                  </span>
+                  <svg
+                    className={`size-4 shrink-0 text-slate-500 transition-transform duration-150 ${accountMenuOpen ? 'rotate-180' : ''}`}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                     aria-hidden
                   >
-                    {demoProfile.initials}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-left text-[0.8125rem] font-semibold text-slate-800">
-                    @{demoProfile.username}
-                  </span>
-                </Link>
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
               </div>
             </aside>
 
