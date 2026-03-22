@@ -109,10 +109,7 @@ MindMesh is built around a modular pipeline that separates retrieval, processing
 
 ## 🏗️ System Architecture
 
-<img width="291" height="636" alt="system" src="https://github.com/user-attachments/assets/8edaf6c8-bb1d-4693-a2b4-45b18bec93de" />
-<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/9a96d600-7966-446b-a452-f75bd21cb7f5" />
-
-
+<img width="3076" height="1376" alt="Gemini_Generated_Image_nf43fsnf43fsnf43" src="https://github.com/user-attachments/assets/581777f9-fc9b-4c8c-be61-ce1700a7c7b7" />
 
 ---
 
