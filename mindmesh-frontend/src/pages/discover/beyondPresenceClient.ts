@@ -6,6 +6,8 @@ const MAX_SYSTEM_PROMPT = 10_000
 export function beyApiOrigin(): string {
   const custom = import.meta.env.VITE_BEY_API_BASE_URL?.trim()
   if (custom) return custom.replace(/\/$/, '')
+  // In dev Vite proxies /bey-api → https://api.bey.dev
+  // In production Vercel routes /bey-api → /api/bey-proxy → https://api.bey.dev
   return `${window.location.origin}/bey-api`
 }
 
