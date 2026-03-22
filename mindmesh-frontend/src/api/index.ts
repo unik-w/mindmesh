@@ -19,7 +19,6 @@ export {
   listSessions,
   loadMoreArxivResults,
   loadMoreFeedPapers,
-  loadMoreSessionPapers,
   loginWithGoogleIdToken,
   paperSearchHitToFeedItem,
   saveInterests,

@@ -1,6 +1,4 @@
 import {
-  lazy,
-  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -24,7 +22,6 @@ import {
   joinSession,
   listSessions,
   loadMoreFeedPapers,
-  loadMoreSessionPapers,
   saveInterests,
   setCardLike,
   syncMindMeshAuth,
@@ -49,12 +46,6 @@ import { ArxivSearchPanel } from './discover/ArxivSearchPanel'
 import { DiscoverAuthorsPanel } from './discover/DiscoverAuthorsPanel'
 import { DiscoverFeedReel } from './discover/DiscoverFeedReel'
 import { stopElevenLabsPlayback } from './discover/elevenlabsTts'
-
-const PaperVideoDialog = lazy(() =>
-  import('./discover/PaperVideoDialog').then((m) => ({
-    default: m.PaperVideoDialog,
-  })),
-)
 import { SummarySpeechButton } from './discover/SummarySpeechButton'
 import { LikesPanel } from './discover/LikesPanel'
 import { demoProfile, feedItems, INTERESTS } from './discover/data'
@@ -138,7 +129,6 @@ export default function DiscoverPage() {
     Record<string, { id: string; author: string; body: string }[]>
   >({})
   const [paperSheetPost, setPaperSheetPost] = useState<FeedItem | null>(null)
-  const [videoDialogPost, setVideoDialogPost] = useState<FeedItem | null>(null)
   const [pdfAnalysis, setPdfAnalysis] = useState<PdfAnalysisResult | null>(null)
   const [pdfAnalysisLoading, setPdfAnalysisLoading] = useState(false)
 
@@ -155,7 +145,6 @@ export default function DiscoverPage() {
   const [feedOffset, setFeedOffset] = useState(0)
   const [feedHasMore, setFeedHasMore] = useState(true)
   const [feedLoadingMore, setFeedLoadingMore] = useState(false)
-  const [sessionFeedLoadingMore, setSessionFeedLoadingMore] = useState(false)
 
   const [sessionFeedItems, setSessionFeedItems] = useState<FeedItem[]>([])
   const [sessionFeedLoading, setSessionFeedLoading] = useState(false)
@@ -288,9 +277,8 @@ export default function DiscoverPage() {
 
   const displayedCommentCount = useCallback((post: FeedItem) => post.comments, [])
 
-  const openPaperVideo = useCallback((p: FeedItem) => {
-    setVideoDialogPost(p)
-  }, [])
+  /** Video explainer UI is kept; LiveKit integration is not wired (avoids loading `livekit-client`). */
+  const openPaperVideo = useCallback((_post: FeedItem) => {}, [])
 
   const toggleCommentsOpen = useCallback((postId: string) => {
     setCommentsOpenPostId((prev) => (prev === postId ? null : postId))
@@ -320,22 +308,13 @@ export default function DiscoverPage() {
             papers: s.papers.map((p) =>
               p.id === postId ? { ...p, comments: p.comments + 1 } : p,
             ),
-          )
-          setSessionFeedItems((prev) =>
-            prev.map((p) =>
-              p.id === postId ? { ...p, comments: p.comments + 1 } : p,
-            ),
-          )
-          setWorkspaceSessions((prev) =>
-            prev.map((s) => ({
-              ...s,
-              papers: s.papers.map((p) =>
-                p.id === postId ? { ...p, comments: p.comments + 1 } : p,
-              ),
-            })),
-          )
-        })
-        return { ...draftState, [postId]: '' }
+          })),
+        )
+        setSessionFeedItems((prev) =>
+          prev.map((p) =>
+            p.id === postId ? { ...p, comments: p.comments + 1 } : p,
+          ),
+        )
       })
     },
     [commentAuthorName],
@@ -387,12 +366,6 @@ export default function DiscoverPage() {
       /* ignore */
     }
   }, [selected])
-
-  const sessionFeedHasMore = useMemo(() => {
-    if (!activeSessionId) return false
-    const s = workspaceSessions.find((x) => x.id === activeSessionId)
-    return Boolean(s?.moreFeed)
-  }, [activeSessionId, workspaceSessions])
 
   const handleLoadMore = useCallback(async () => {
     if (activeSessionId && sessionRecoMode) {
@@ -720,13 +693,6 @@ export default function DiscoverPage() {
     },
     [activeSessionId],
   )
-
-  useEffect(() => {
-    if (!selectedSeedPaperId) return
-    if (!paperHits.some((h) => h.id === selectedSeedPaperId)) {
-      setSelectedSeedPaperId(null)
-    }
-  }, [paperHits, selectedSeedPaperId])
 
   const prioritizedFeed = useMemo(() => {
     if (discoveryFeedItems.length > 0) {
@@ -1724,15 +1690,6 @@ export default function DiscoverPage() {
         {paperSheetModal
           ? createPortal(paperSheetModal, document.body)
           : null}
-        {videoDialogPost ? (
-          <Suspense fallback={null}>
-            <PaperVideoDialog
-              key={videoDialogPost.id}
-              post={videoDialogPost}
-              onClose={() => setVideoDialogPost(null)}
-            />
-          </Suspense>
-        ) : null}
     </main>
   )
 }

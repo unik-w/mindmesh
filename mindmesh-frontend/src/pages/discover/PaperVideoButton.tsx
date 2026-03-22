@@ -4,7 +4,7 @@ import { VideoCameraIcon } from './icons'
 export function PaperVideoButton({
   onClick,
   className = '',
-  title = 'Video explainer (Beyond Presence)',
+  title = 'Video explainer (coming soon)',
 }: {
   onClick: (e: ReactMouseEvent<HTMLButtonElement>) => void
   className?: string
