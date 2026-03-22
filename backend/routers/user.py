@@ -14,6 +14,12 @@ router = APIRouter(prefix="/user", tags=["User"])
 
 class LikeRequest(BaseModel):
     paper_id: str
+    title: str | None = None
+    summary: str | None = None
+    authors: list[str] = []
+    categories: list[str] = []
+    links: dict = {}
+    published: str | None = None
 
 
 class UpdateInterestsRequest(BaseModel):
@@ -44,11 +50,38 @@ def get_likes(user: dict = Depends(deps.get_current_user)):
     return [row["papers"] for row in result.data if row.get("papers")]
 
 
-def _interest_fallback_feed(user_id: str, limit: int, offset: int) -> list:
-    """When recommend_papers returns nothing (no likes yet), fetch papers
-    from the arXiv API matching the user's saved interests."""
-    import requests
-    from backend.routers.arxiv import ARXIV_API, _parse_feed
+_INTEREST_TO_ARXIV_CATS: dict[str, list[str]] = {
+    "Machine learning": ["cs.LG", "stat.ML"],
+    "AI": ["cs.AI", "cs.CL", "cs.CV"],
+    "Biology": ["q-bio"],
+    "Genomics": ["q-bio.GN"],
+    "Climate": ["physics.ao-ph", "physics.geo-ph"],
+    "Sustainability": ["cs.CY"],
+    "Physics": ["physics"],
+    "Applied math": ["math.AP", "math-ph"],
+    "Medicine": ["q-bio.QM"],
+    "Health": ["q-bio"],
+    "HCI": ["cs.HC"],
+    "Design": ["cs.HC", "cs.GR"],
+    "Computing": ["cs.DC", "cs.PF"],
+    "Neuroscience": ["q-bio.NC"],
+    "Cognition": ["q-bio.NC"],
+    "Chemistry": ["physics.chem-ph"],
+    "Materials": ["cond-mat.mtrl-sci"],
+    "Robotics": ["cs.RO"],
+    "Systems": ["cs.SY", "eess.SY"],
+    "Economics": ["econ"],
+    "Policy": ["cs.CY", "econ.GN"],
+    "Social science": ["cs.SI", "cs.CY"],
+    "Behavioral science": ["q-bio.NC"],
+    "Energy": ["eess.SP", "physics.app-ph"],
+    "Infrastructure": ["cs.NI"],
+}
+
+
+def _arxiv_feed_for_interests(user_id: str, limit: int, offset: int) -> list:
+    """Fetch recent arXiv papers matching the user's saved interests."""
+    from backend.routers.arxiv import query_arxiv
 
     row = deps.db.table("users").select("interests").eq("id", user_id).execute()
     if not row.data:
@@ -59,42 +92,41 @@ def _interest_fallback_feed(user_id: str, limit: int, offset: int) -> list:
     if not interests:
         return []
 
+    cats: set[str] = set()
+    keyword_terms: list[str] = []
     stop = {"and", "&", "the", "of", "in", "for", "a", "an", "to"}
-    terms: list[str] = []
+
     for label in interests:
-        words = [
-            w.strip("&,;. ").lower()
-            for w in str(label).split()
-            if w.strip("&,;. ").lower() not in stop and len(w.strip("&,;. ")) > 2
-        ]
-        if words:
-            terms.append("all:" + "+".join(words))
+        mapped = _INTEREST_TO_ARXIV_CATS.get(label)
+        if mapped:
+            cats.update(mapped)
+        else:
+            words = [
+                w.strip("&,;. ").lower()
+                for w in str(label).split()
+                if w.strip("&,;. ").lower() not in stop and len(w.strip("&,;. ")) > 1
+            ]
+            if words:
+                keyword_terms.append("ti:" + "+".join(words))
+
+    terms: list[str] = [f"cat:{c}" for c in sorted(cats)]
+    terms.extend(keyword_terms)
 
     if not terms:
         return []
 
-    search_query = " OR ".join(terms[:8])
+    search_query = " OR ".join(terms[:12])
+
+    log.info("[arxiv-feed] user=%s interests=%s query=%s", user_id, interests, search_query)
 
     try:
-        resp = requests.get(
-            ARXIV_API,
-            params={
-                "search_query": search_query,
-                "start": offset,
-                "max_results": limit,
-                "sortBy": "relevance",
-                "sortOrder": "descending",
-            },
-            headers={"User-Agent": "mindmesh/1"},
-            timeout=120,
-        )
-        resp.raise_for_status()
-    except requests.RequestException as exc:
+        result = query_arxiv(search_query, start=offset, max_results=limit)
+        papers = result.get("papers", [])
+        log.info("[arxiv-feed] returned %d papers", len(papers))
+        return papers
+    except Exception as exc:
         log.error("arXiv interest search failed: %s", exc)
         return []
-
-    feed = _parse_feed(resp.text)
-    return feed.get("papers", [])
 
 
 @router.get("/feed")
@@ -103,20 +135,60 @@ def feed(
     limit: int = Query(6, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
-    result = deps.db.rpc(
-        "recommend_papers",
-        {"p_user_id": user["user_id"], "p_limit": limit, "p_offset": offset},
-    ).execute()
+    MIN_SIMILARITY = 0.75
+    uid = user["user_id"]
 
-    if result.data:
-        return result.data
+    # Check if user has any likes (determines DB vs arXiv path)
+    likes_check = deps.db.table("likes").select("id", count="exact").eq("user_id", uid).limit(1).execute()
+    has_likes = bool(likes_check.data)
 
-    log.info("No recommendations for user %s, falling back to interest search", user["user_id"])
-    return _interest_fallback_feed(user["user_id"], limit, offset)
+    if has_likes:
+        result = deps.db.rpc(
+            "recommend_papers",
+            {"p_user_id": uid, "p_limit": limit, "p_offset": offset},
+        ).execute()
+        db_papers = result.data or []
+
+        if db_papers:
+            best_sim = max((r.get("similarity") or 0) for r in db_papers)
+            log.info("[feed] user=%s DB best_sim=%.4f threshold=%.2f", uid, best_sim, MIN_SIMILARITY)
+            if best_sim >= MIN_SIMILARITY:
+                return db_papers
+            log.info("[feed] DB similarity too low, falling back to arXiv")
+
+    # New user (no likes) OR DB similarity below threshold → arXiv by interests
+    arxiv_papers = _arxiv_feed_for_interests(uid, limit, offset)
+    log.info("[feed] user=%s arxiv_papers=%d", uid, len(arxiv_papers))
+    if arxiv_papers:
+        return arxiv_papers
+
+    log.info("[feed] arXiv returned nothing, returning DB fallback")
+    if has_likes:
+        return db_papers  # type: ignore[possibly-undefined]
+    return []
 
 
 @router.post("/like")
 def like_paper(body: LikeRequest, user: dict = Depends(deps.get_current_user)):
+    existing = deps.db.table("papers").select("id").eq("id", body.paper_id).execute()
+    if not existing.data and body.title:
+        from backend.routers.paper import _compute_embedding
+
+        embedding = _compute_embedding(body.title, body.summary)
+        deps.db.table("papers").upsert(
+            {
+                "id": body.paper_id,
+                "title": body.title,
+                "summary": body.summary or "",
+                "authors": body.authors,
+                "categories": body.categories,
+                "links": body.links,
+                "published": body.published,
+                "embedding": "[" + ",".join(str(x) for x in embedding) + "]",
+            }
+        ).execute()
+        log.info("[like] inserted missing paper %s", body.paper_id)
+
     result = (
         deps.db.table("likes")
         .upsert(

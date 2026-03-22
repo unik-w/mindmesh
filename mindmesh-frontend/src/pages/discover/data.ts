@@ -1,18 +1,31 @@
 import type { FeedItem } from './types'
 
 export const INTERESTS = [
-  { id: 'ml-ai', label: 'Machine learning & AI' },
-  { id: 'biology', label: 'Biology & genomics' },
-  { id: 'climate', label: 'Climate & sustainability' },
-  { id: 'physics', label: 'Physics & applied math' },
-  { id: 'medicine', label: 'Medicine & health' },
-  { id: 'hci', label: 'HCI, design & computing' },
-  { id: 'neuro', label: 'Neuroscience & cognition' },
-  { id: 'materials', label: 'Chemistry & materials' },
-  { id: 'robotics', label: 'Robotics & systems' },
-  { id: 'policy', label: 'Economics & policy' },
-  { id: 'social', label: 'Social & behavioral science' },
-  { id: 'energy', label: 'Energy & infrastructure' },
+  { id: 'ml', label: 'Machine learning' },
+  { id: 'ai', label: 'AI' },
+  { id: 'biology', label: 'Biology' },
+  { id: 'genomics', label: 'Genomics' },
+  { id: 'climate', label: 'Climate' },
+  { id: 'sustainability', label: 'Sustainability' },
+  { id: 'physics', label: 'Physics' },
+  { id: 'applied-math', label: 'Applied math' },
+  { id: 'medicine', label: 'Medicine' },
+  { id: 'health', label: 'Health' },
+  { id: 'hci', label: 'HCI' },
+  { id: 'design', label: 'Design' },
+  { id: 'computing', label: 'Computing' },
+  { id: 'neuro', label: 'Neuroscience' },
+  { id: 'cognition', label: 'Cognition' },
+  { id: 'chemistry', label: 'Chemistry' },
+  { id: 'materials', label: 'Materials' },
+  { id: 'robotics', label: 'Robotics' },
+  { id: 'systems', label: 'Systems' },
+  { id: 'economics', label: 'Economics' },
+  { id: 'policy', label: 'Policy' },
+  { id: 'social-science', label: 'Social science' },
+  { id: 'behavioral-science', label: 'Behavioral science' },
+  { id: 'energy', label: 'Energy' },
+  { id: 'infrastructure', label: 'Infrastructure' },
 ] as const
 
 export const authorSearchPreview = [
@@ -72,7 +85,7 @@ export const DEMO_ARXIV_IDS = [
 export const feedItems: readonly FeedItem[] = [
   {
     id: 'f1',
-    interestIds: ['ml-ai'],
+    interestIds: ['ml', 'ai'],
     authorLine:
       'Chen, Liu, Agrawal, Nakamura, Stojanović, van der Berg, Okonkwo, Patel, Frost, Kim, Santos, Brooks, Ibrahim & the LongContext Consortium',
     title:
@@ -116,7 +129,7 @@ export const feedItems: readonly FeedItem[] = [
   },
   {
     id: 'f4',
-    interestIds: ['hci', 'social'],
+    interestIds: ['hci', 'social-science'],
     authorLine: 'Nguyen & Brooks',
     title: 'Participatory design for crisis informatics on low bandwidth',
     meta: 'CHI · 3d ago',
@@ -234,7 +247,7 @@ export const urbanMobilityPapers: readonly FeedItem[] = [
   },
   {
     id: 'um3',
-    interestIds: ['robotics', 'ml-ai'],
+    interestIds: ['robotics', 'ml'],
     authorLine: 'Zhao, Mensah',
     title: 'Robust routing under stochastic dwell times for multimodal trips',
     meta: 'ACM SIGSPATIAL · 1w ago',
@@ -265,7 +278,7 @@ export const urbanMobilityPapers: readonly FeedItem[] = [
 export const alignmentSessionPapers: readonly FeedItem[] = [
   {
     id: 'ar1',
-    interestIds: ['ml-ai', 'neuro'],
+    interestIds: ['ml', 'ai', 'neuro'],
     authorLine: 'Bridges, Yamamoto',
     title: 'Sparse dictionary features track harmfulness cues in refusal behavior',
     meta: 'NeurIPS safety workshop · 3d ago',
@@ -279,7 +292,7 @@ export const alignmentSessionPapers: readonly FeedItem[] = [
   },
   {
     id: 'ar2',
-    interestIds: ['ml-ai', 'social'],
+    interestIds: ['ml', 'ai', 'social-science'],
     authorLine: 'Caldwell et al.',
     title: 'Sycophancy gradients in human preference datasets for chat assistants',
     meta: 'ACL · 5d ago',
@@ -293,7 +306,7 @@ export const alignmentSessionPapers: readonly FeedItem[] = [
   },
   {
     id: 'ar3',
-    interestIds: ['ml-ai'],
+    interestIds: ['ml', 'ai'],
     authorLine: 'Nair & Kostova',
     title: 'Debate-style critics improve oversight on long-form coding tasks',
     meta: 'ICML · 1w ago',
@@ -307,7 +320,7 @@ export const alignmentSessionPapers: readonly FeedItem[] = [
   },
   {
     id: 'ar4',
-    interestIds: ['ml-ai', 'robotics'],
+    interestIds: ['ml', 'ai', 'robotics'],
     authorLine: 'Petrov, Silva',
     title: 'Specification gaming in RL from human feedback for embodied agents',
     meta: 'CoRL · 2w ago',
