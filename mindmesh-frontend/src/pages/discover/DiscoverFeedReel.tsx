@@ -1,15 +1,13 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  type Dispatch,
-  type MouseEvent as ReactMouseEvent,
-  type SetStateAction,
+import type {
+  Dispatch,
+  MouseEvent as ReactMouseEvent,
+  SetStateAction,
 } from 'react'
 import { btnPrimary, gradientText } from '../../uiClasses'
 import { formatCount } from './format'
 import type { FeedItem, ReelItem } from './types'
 import { HeartIcon, UserCircleIcon } from './icons'
+import { SummarySpeechButton } from './SummarySpeechButton'
 
 export type DiscoverFeedReelProps = {
   feedWithPromos: ReelItem[]
@@ -28,9 +26,6 @@ export type DiscoverFeedReelProps = {
     e: ReactMouseEvent<HTMLDivElement>,
     post: FeedItem,
   ) => void
-  onLoadMore?: () => void
-  loadingMore?: boolean
-  hasMore?: boolean
 }
 
 export function DiscoverFeedReel({
@@ -47,48 +42,7 @@ export function DiscoverFeedReel({
   commentExtras,
   submitComment,
   handleCardMainClick,
-  onLoadMore,
-  loadingMore,
-  hasMore,
 }: DiscoverFeedReelProps) {
-  const observerRef = useRef<IntersectionObserver | null>(null)
-  const prefetchTriggered = useRef(false)
-
-  // Reset the prefetch guard whenever new items arrive so the next
-  // batch can be triggered as the user keeps scrolling.
-  useEffect(() => {
-    prefetchTriggered.current = false
-  }, [feedWithPromos.length])
-
-  const PREFETCH_OFFSET = 3
-  const triggerIndex = feedWithPromos.length - PREFETCH_OFFSET
-
-  const prefetchRef = useCallback(
-    (node: HTMLElement | null) => {
-      if (observerRef.current) {
-        observerRef.current.disconnect()
-        observerRef.current = null
-      }
-      if (!node || !onLoadMore || !hasMore) return
-
-      observerRef.current = new IntersectionObserver(
-        (entries) => {
-          if (
-            entries[0]?.isIntersecting &&
-            !loadingMore &&
-            !prefetchTriggered.current
-          ) {
-            prefetchTriggered.current = true
-            onLoadMore()
-          }
-        },
-        { rootMargin: '200px' },
-      )
-      observerRef.current.observe(node)
-    },
-    [onLoadMore, hasMore, loadingMore],
-  )
-
   return (
     <section
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
@@ -101,13 +55,11 @@ export function DiscoverFeedReel({
         role="region"
         aria-label="Paper reels—scroll up or down; occasional conference and job cards may appear between papers"
       >
-        {feedWithPromos.map((item, idx) => {
-        const isPrefetchTrigger = idx === triggerIndex && hasMore
+        {feedWithPromos.map((item) => {
         if (item.kind === 'conference') {
           return (
             <article
               key={item.id}
-              ref={isPrefetchTrigger ? prefetchRef : undefined}
               className="flex min-h-full snap-start snap-always shrink-0 flex-col justify-center px-4 py-3"
             >
               <div className="relative mx-auto flex h-[min(88dvh,700px)] w-full max-w-[420px] shrink-0 flex-col overflow-hidden rounded-[1.25rem] border border-violet-200/90 bg-linear-to-br from-white via-violet-50/50 to-cyan-50/40 shadow-[0_20px_50px_-15px_rgba(15,23,42,0.12)] ring-1 ring-violet-100/80 backdrop-blur-sm">
@@ -120,7 +72,7 @@ export function DiscoverFeedReel({
                   aria-hidden
                 />
                 <div className="relative z-1 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                  <div className="min-h-0 flex-1 overflow-y-hidden lg:overflow-y-auto lg:overscroll-y-contain px-5 pt-5 pb-4 lg:[scrollbar-width:thin]">
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-5 pb-4 [scrollbar-width:thin]">
                     <p
                       className={`m-0 text-[0.68rem] font-semibold tracking-[0.14em] uppercase ${gradientText}`}
                     >
@@ -166,7 +118,6 @@ export function DiscoverFeedReel({
           return (
             <article
               key={item.id}
-              ref={isPrefetchTrigger ? prefetchRef : undefined}
               className="flex min-h-full snap-start snap-always shrink-0 flex-col justify-center px-4 py-3"
             >
               <div className="relative mx-auto flex h-[min(88dvh,700px)] w-full max-w-[420px] shrink-0 flex-col overflow-hidden rounded-[1.25rem] border border-slate-200/90 bg-linear-to-br from-white via-slate-50/80 to-cyan-50/30 shadow-[0_20px_50px_-15px_rgba(15,23,42,0.12)] ring-1 ring-slate-100/80 backdrop-blur-sm">
@@ -179,7 +130,7 @@ export function DiscoverFeedReel({
                   aria-hidden
                 />
                 <div className="relative z-1 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                  <div className="min-h-0 flex-1 overflow-y-hidden lg:overflow-y-auto lg:overscroll-y-contain px-5 pt-5 pb-4 lg:[scrollbar-width:thin]">
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-5 pb-4 [scrollbar-width:thin]">
                     <p
                       className={`m-0 text-[0.68rem] font-semibold tracking-[0.14em] uppercase ${gradientText}`}
                     >
@@ -234,7 +185,6 @@ export function DiscoverFeedReel({
         return (
           <article
             key={post.id}
-            ref={isPrefetchTrigger ? prefetchRef : undefined}
             className="flex min-h-full snap-start snap-always shrink-0 flex-col justify-center px-4 py-3"
           >
             <div className="relative mx-auto flex h-[min(88dvh,700px)] w-full max-w-[420px] shrink-0 flex-col overflow-hidden rounded-[1.25rem] border border-slate-200/90 bg-white/95 shadow-[0_20px_50px_-15px_rgba(15,23,42,0.12)] ring-1 ring-slate-100/80 backdrop-blur-sm">
@@ -248,7 +198,7 @@ export function DiscoverFeedReel({
               />
               <div className="relative z-1 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 <div
-                  className="min-h-0 min-w-0 flex-1 cursor-pointer overflow-y-hidden lg:overflow-y-auto lg:overscroll-y-contain lg:[scrollbar-width:thin]"
+                  className="min-h-0 min-w-0 flex-1 cursor-pointer overflow-y-auto overscroll-y-contain [scrollbar-width:thin]"
                   onClick={(e) => handleCardMainClick(e, post)}
                 >
                   <div className="relative px-5 pt-3 pb-3 sm:pt-3.5">
@@ -308,14 +258,20 @@ export function DiscoverFeedReel({
                     </div>
                   </div>
                   <div
-                    className="relative mx-4 mb-3 mt-0 max-h-[min(440px,58svh)] overflow-y-hidden lg:overflow-y-auto rounded-xl border border-slate-200/85 bg-linear-to-b from-slate-50/98 to-white px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] ring-1 ring-slate-100/70 [scrollbar-width:thin]"
+                    className="relative mx-4 mb-3 mt-0 max-h-[min(440px,58svh)] overflow-y-auto rounded-xl border border-slate-200/85 bg-linear-to-b from-slate-50/98 to-white px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] ring-1 ring-slate-100/70 [scrollbar-width:thin]"
                     aria-label="AI-generated summary"
                   >
-                    <p
-                      className={`m-0 text-[0.68rem] font-semibold tracking-[0.14em] uppercase ${gradientText}`}
-                    >
-                      AI summary
-                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p
+                        className={`m-0 min-w-0 flex-1 text-[0.68rem] font-semibold tracking-[0.14em] uppercase ${gradientText}`}
+                      >
+                        AI summary
+                      </p>
+                      <SummarySpeechButton
+                        text={post.aiSummary}
+                        className="-mr-1 -mt-0.5"
+                      />
+                    </div>
                     <div className="mt-2.5 space-y-2.5 text-[0.9rem] leading-[1.58] text-slate-700">
                       {post.aiSummary
                         .split('\n\n')
@@ -485,29 +441,6 @@ export function DiscoverFeedReel({
           </article>
         )
         })}
-        {loadingMore ? (
-          <div
-            className="flex min-h-[120px] snap-start items-center justify-center py-6"
-            aria-hidden="true"
-          >
-            <div className="flex flex-col items-center gap-2">
-              <span
-                className="size-8 rounded-full border-2 border-slate-200 border-t-violet-600 animate-spin"
-                aria-hidden="true"
-              />
-              <span className="text-xs font-medium text-slate-500">
-                Loading more papers…
-              </span>
-            </div>
-          </div>
-        ) : null}
-        {!hasMore && feedWithPromos.length > 0 ? (
-          <div className="flex min-h-[80px] snap-start items-center justify-center py-6">
-            <span className="text-xs font-medium text-slate-400">
-              You've reached the end of your feed
-            </span>
-          </div>
-        ) : null}
       </div>
     </section>
   )
