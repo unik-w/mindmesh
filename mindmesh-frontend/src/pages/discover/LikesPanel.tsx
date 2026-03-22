@@ -1,10 +1,27 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getUserLikedPapers, type LikedPaper } from '../../api'
 import { HeartIcon } from './icons'
+import type { FeedItem } from './types'
 
 type Props = {
   likedPosts: Record<string, boolean>
-  togglePostLike: (postId: string) => void
+  togglePostLike: (post: FeedItem) => void
+}
+
+function likedPaperAsFeedItem(p: LikedPaper): FeedItem {
+  return {
+    id: p.id,
+    interestIds: [],
+    authorLine: p.authorLine,
+    title: p.title,
+    meta: '',
+    aiSummary: '',
+    stats: { saves: 0, thread: 0 },
+    tags: ['Research', 'Paper'] as const,
+    citations: 0,
+    likes: 0,
+    comments: 0,
+  }
 }
 
 export function LikesPanel({ likedPosts, togglePostLike }: Props) {
@@ -27,9 +44,9 @@ export function LikesPanel({ likedPosts, togglePostLike }: Props) {
   }, [])
 
   const handleUnlike = useCallback(
-    (id: string) => {
-      togglePostLike(id)
-      setPapers((prev) => prev.filter((p) => p.id !== id))
+    (paper: LikedPaper) => {
+      togglePostLike(likedPaperAsFeedItem(paper))
+      setPapers((prev) => prev.filter((p) => p.id !== paper.id))
     },
     [togglePostLike],
   )
@@ -95,7 +112,7 @@ export function LikesPanel({ likedPosts, togglePostLike }: Props) {
             </div>
             <button
               type="button"
-              onClick={() => handleUnlike(paper.id)}
+              onClick={() => handleUnlike(paper)}
               className="mt-0.5 flex shrink-0 items-center justify-center rounded-full p-1.5 transition-colors hover:bg-rose-50"
               aria-label={`Unlike ${paper.title}`}
               title="Remove like"

@@ -22,6 +22,7 @@ import type {
   CardComment,
   CreateSessionInput,
   CreateSessionResult,
+  LikePaperPayload,
   LikeResult,
   PaperSearchHit,
   PdfUploadResult,
@@ -170,19 +171,34 @@ function backendPaperToFeedItem(p: BackendPaper): FeedItem {
   }
 }
 
-function paperSearchHitToFeedItem(h: PaperSearchHit): FeedItem {
+export function paperSearchHitToFeedItem(h: PaperSearchHit): FeedItem {
+  const summary = (h.summary ?? '').trim()
+  const tags: readonly [string, string] =
+    h.categories?.length && h.categories[0]
+      ? [
+          h.categories[0]!,
+          h.categories[1] ?? h.categories[0]!,
+        ]
+      : (['Paper', 'Search'] as const)
+  const bp: BackendPaper = {
+    id: h.id,
+    title: h.title,
+    links: h.links ?? null,
+  }
   return {
     id: h.id,
     interestIds: [],
     authorLine: h.authorLine,
     title: h.title,
     meta: h.meta,
-    aiSummary: '',
+    aiSummary: summary,
     stats: { saves: 0, thread: 0 },
-    tags: ['Paper', 'Search'] as const,
+    tags,
     citations: 0,
-    likes: 0,
+    likes: h.likes ?? 0,
     comments: 0,
+    arxivId: extractArxivId(bp),
+    paperDetail: summary || undefined,
   }
 }
 
@@ -471,6 +487,53 @@ function cachePapers(papers: BackendPaper[]) {
   for (const p of papers) rawPaperCache.set(p.id, p)
 }
 
+/** Like count for one paper (GET /paper/likes?paper_id=). No auth required. */
+export async function fetchPaperLikeCount(paperId: string): Promise<number> {
+  const res = await apiFetchJsonPublic<Record<string, unknown>>(
+    `${ROUTES.paperLikes}?paper_id=${encodeURIComponent(paperId)}`,
+    { method: 'GET' },
+  )
+  const raw = res.likes ?? res.count
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  return Number.isFinite(n) ? Math.max(0, Math.trunc(n)) : 0
+}
+
+/** Parallel count lookups for feeds/search (caps at 50 ids). */
+export async function fetchPaperLikeCounts(
+  paperIds: string[],
+): Promise<Map<string, number>> {
+  const unique = [...new Set(paperIds)].slice(0, 50)
+  if (unique.length === 0) return new Map()
+  const pairs = await Promise.all(
+    unique.map(async (id) => {
+      const n = await fetchPaperLikeCount(id)
+      return [id, n] as const
+    }),
+  )
+  return new Map(pairs)
+}
+
+async function attachLikeCountsToFeedItems(
+  items: FeedItem[],
+): Promise<FeedItem[]> {
+  if (items.length === 0) return items
+  try {
+    const m = await fetchPaperLikeCounts(items.map((i) => i.id))
+    return items.map((i) => ({ ...i, likes: m.get(i.id) ?? i.likes }))
+  } catch {
+    return items
+  }
+}
+
+function feedQueryString(offset: number, sessionId?: string | null): string {
+  const params = new URLSearchParams({
+    limit: String(FEED_PAGE_SIZE),
+    offset: String(offset),
+  })
+  if (sessionId) params.set('session_id', sessionId)
+  return params.toString()
+}
+
 export async function getDiscoveryFeed(
   _interestIds: string[],
   onSummaries?: (summaries: FeedSummaryItem[]) => void,
@@ -480,7 +543,7 @@ export async function getDiscoveryFeed(
     return mockStore.getDiscoveryFeed(_interestIds)
   }
   const papers = await apiFetchJson<BackendPaper[]>(
-    `${ROUTES.userFeed}?limit=${FEED_PAGE_SIZE}&offset=0`,
+    `${ROUTES.userFeed}?${feedQueryString(0)}`,
     { method: 'GET' },
   )
   if (!Array.isArray(papers) || papers.length === 0) return []
@@ -489,19 +552,20 @@ export async function getDiscoveryFeed(
   void fetchFeedSummaries(papers).then((summaries) => {
     if (summaries.length > 0) onSummaries?.(summaries)
   })
-  return items
+  return attachLikeCountsToFeedItems(items)
 }
 
 export async function loadMoreFeedPapers(
   offset: number,
   onSummaries?: (summaries: FeedSummaryItem[]) => void,
+  sessionId?: string | null,
 ): Promise<FeedItem[]> {
   if (isMockApiMode()) {
     await delay()
     return []
   }
   const papers = await apiFetchJson<BackendPaper[]>(
-    `${ROUTES.userFeed}?limit=${FEED_PAGE_SIZE}&offset=${offset}`,
+    `${ROUTES.userFeed}?${feedQueryString(offset, sessionId)}`,
     { method: 'GET' },
   )
   if (!Array.isArray(papers) || papers.length === 0) return []
@@ -510,7 +574,18 @@ export async function loadMoreFeedPapers(
   void fetchFeedSummaries(papers).then((summaries) => {
     if (summaries.length > 0) onSummaries?.(summaries)
   })
-  return items
+  return attachLikeCountsToFeedItems(items)
+}
+
+function formatSessionListMeta(createdAt?: string | null): string {
+  if (!createdAt) return 'Your session'
+  const d = new Date(createdAt)
+  if (Number.isNaN(d.getTime())) return 'Your session'
+  return d.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
 }
 
 export async function listSessions(): Promise<SessionSummary[]> {
@@ -518,7 +593,34 @@ export async function listSessions(): Promise<SessionSummary[]> {
     await delay()
     return mockStore.listSessions()
   }
-  return []
+  const rows = await apiFetchJson<
+    {
+      id: string
+      name: string
+      created_at?: string
+      like_count?: number
+    }[]
+  >(ROUTES.userSessions, { method: 'GET' })
+  if (!Array.isArray(rows)) return []
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.name,
+    meta: formatSessionListMeta(r.created_at),
+    papers: [],
+    likeCount: typeof r.like_count === 'number' ? r.like_count : 0,
+  }))
+}
+
+export async function deleteSession(sessionId: string): Promise<void> {
+  if (isMockApiMode()) {
+    await delay(80)
+    mockStore.deleteSession(sessionId)
+    return
+  }
+  await apiFetchJson<{ deleted?: boolean }>(
+    `${ROUTES.userSessionDelete}?session_id=${encodeURIComponent(sessionId)}`,
+    { method: 'DELETE' },
+  )
 }
 
 export async function createSession(
@@ -528,8 +630,6 @@ export async function createSession(
     await delay(220)
     return mockStore.createSession(input)
   }
-  await delay(120)
-  const id = `session-${Date.now()}`
   let papers: FeedItem[] = []
   if (input.source === 'paper') {
     const q = input.paperQuery?.trim() ?? ''
@@ -538,25 +638,52 @@ export async function createSession(
       papers = hits.slice(0, 6).map(paperSearchHitToFeedItem)
     }
   }
-  const title =
+  const derivedName =
     input.title?.trim() ||
     (input.source === 'paper' && input.paperQuery?.trim()
-      ? `Session · ${input.paperQuery.trim().slice(0, 36)}${input.paperQuery.trim().length > 36 ? '…' : ''}`
+      ? `Session · ${input.paperQuery.trim().slice(0, 80)}${input.paperQuery.trim().length > 80 ? '…' : ''}`
       : input.source === 'pdf'
-        ? `PDF · ${(input.fileMeta?.name ?? 'upload').replace(/\.pdf$/i, '').slice(0, 36)}`
+        ? `PDF · ${(input.fileMeta?.name ?? 'upload').replace(/\.pdf$/i, '').slice(0, 80)}`
         : 'New session')
-  const meta = 'You · just now'
-  return { session: { id, title, meta, papers } }
+  const row = await apiFetchJson<{ id: string; name: string; created_at?: string }>(
+    ROUTES.userSessions,
+    {
+      method: 'POST',
+      json: { name: derivedName },
+    },
+  )
+  return {
+    session: {
+      id: row.id,
+      title: row.name,
+      meta: formatSessionListMeta(row.created_at),
+      papers,
+      likeCount: 0,
+    },
+  }
 }
 
-export async function getSessionFeed(_sessionId: string): Promise<FeedItem[]> {
+export async function getSessionFeed(
+  sessionId: string,
+  onSummaries?: (summaries: FeedSummaryItem[]) => void,
+): Promise<FeedItem[]> {
   if (isMockApiMode()) {
     await delay()
-    const feed = mockStore.getSessionFeed(_sessionId)
+    const feed = mockStore.getSessionFeed(sessionId)
     if (!feed) throw new Error('Session not found')
     return feed
   }
-  return []
+  const papers = await apiFetchJson<BackendPaper[]>(
+    `${ROUTES.userFeed}?${feedQueryString(0, sessionId)}`,
+    { method: 'GET' },
+  )
+  if (!Array.isArray(papers) || papers.length === 0) return []
+  cachePapers(papers)
+  const items = papers.map(backendPaperToFeedItem)
+  void fetchFeedSummaries(papers).then((summaries) => {
+    if (summaries.length > 0) onSummaries?.(summaries)
+  })
+  return attachLikeCountsToFeedItems(items)
 }
 
 export async function joinSession(sessionId: string): Promise<void> {
@@ -569,9 +696,19 @@ export async function joinSession(sessionId: string): Promise<void> {
   await delay(40)
 }
 
+function likesFromMutationBody(body: unknown): number | undefined {
+  if (!body || typeof body !== 'object') return undefined
+  const n = (body as { likes?: unknown }).likes
+  if (typeof n === 'number' && Number.isFinite(n))
+    return Math.max(0, Math.trunc(n))
+  return undefined
+}
+
 export async function setCardLike(
   cardId: string,
   liked: boolean,
+  sessionId?: string | null,
+  paperForInsert?: LikePaperPayload | null,
 ): Promise<LikeResult> {
   if (isMockApiMode()) {
     await delay(90)
@@ -579,29 +716,56 @@ export async function setCardLike(
   }
   if (liked) {
     const cached = rawPaperCache.get(cardId)
-    await apiFetchJson(ROUTES.userLike, {
+    const insert =
+      cached != null
+        ? {
+            title: cached.title,
+            summary: cached.summary ?? null,
+            authors: cached.authors ?? [],
+            categories: cached.categories ?? [],
+            links: cached.links ?? {},
+            published: cached.published ?? null,
+          }
+        : paperForInsert?.title
+          ? {
+              title: paperForInsert.title,
+              summary: paperForInsert.summary ?? null,
+              authors: paperForInsert.authors ?? [],
+              categories: paperForInsert.categories ?? [],
+              links: paperForInsert.links ?? {},
+              published: paperForInsert.published ?? null,
+            }
+          : {}
+    const body = await apiFetchJson<Record<string, unknown>>(ROUTES.userLike, {
       method: 'POST',
       json: {
         paper_id: cardId,
-        ...(cached
-          ? {
-              title: cached.title,
-              summary: cached.summary ?? null,
-              authors: cached.authors ?? [],
-              categories: cached.categories ?? [],
-              links: cached.links ?? {},
-              published: cached.published ?? null,
-            }
-          : {}),
+        ...(sessionId ? { session_id: sessionId } : {}),
+        ...insert,
       },
     })
-  } else {
-    await apiFetchJson(ROUTES.userDislike, {
+    const serverLiked =
+      typeof body.liked === 'boolean' ? body.liked : true
+    return {
+      cardId,
+      liked: serverLiked,
+      likes: likesFromMutationBody(body),
+    }
+  }
+  const body = await apiFetchJson<Record<string, unknown>>(
+    ROUTES.userDislike,
+    {
       method: 'DELETE',
       json: { paper_id: cardId },
-    })
+    },
+  )
+  const serverLiked =
+    typeof body.liked === 'boolean' ? body.liked : false
+  return {
+    cardId,
+    liked: serverLiked,
+    likes: likesFromMutationBody(body),
   }
-  return { cardId, liked }
 }
 
 export async function addCardComment(
@@ -671,13 +835,24 @@ export async function searchPapers(query: string): Promise<PaperSearchHit[]> {
     { method: 'GET' },
   )
   if (!Array.isArray(papers)) return []
-  return papers.map((p) => ({
+  cachePapers(papers)
+  const hits = papers.map((p) => ({
     id: p.id,
     title: p.title,
     authorLine:
       p.authors?.length ? p.authors.join(', ') : 'Unknown authors',
     meta: formatPaperMeta(p.published, p.categories ?? null),
+    summary: p.summary ?? undefined,
+    categories: p.categories ?? undefined,
+    links: p.links ?? undefined,
+    likes: 0,
   }))
+  try {
+    const likesMap = await fetchPaperLikeCounts(hits.map((h) => h.id))
+    return hits.map((h) => ({ ...h, likes: likesMap.get(h.id) ?? 0 }))
+  } catch {
+    return hits
+  }
 }
 
 export async function searchAuthors(query: string): Promise<AuthorSearchHit[]> {

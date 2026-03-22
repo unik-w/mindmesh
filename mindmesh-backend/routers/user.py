@@ -1,11 +1,13 @@
 import json
 import logging
 import uuid
+from collections import Counter
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend import deps
+from backend.routers.paper import paper_like_total
 
 log = logging.getLogger(__name__)
 
@@ -14,6 +16,7 @@ router = APIRouter(prefix="/user", tags=["User"])
 
 class LikeRequest(BaseModel):
     paper_id: str
+    session_id: str | None = None
     title: str | None = None
     summary: str | None = None
     authors: list[str] = []
@@ -22,8 +25,81 @@ class LikeRequest(BaseModel):
     published: str | None = None
 
 
+class CreateSessionBody(BaseModel):
+    name: str = Field(default="New session", min_length=1, max_length=500)
+
+
 class UpdateInterestsRequest(BaseModel):
     interests: list[str]
+
+
+def _assert_session_owned(session_id: str, user_id: str) -> None:
+    row = (
+        deps.db.table("sessions")
+        .select("id")
+        .eq("id", session_id)
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if not row.data:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+
+@router.post("/sessions")
+def create_session(body: CreateSessionBody, user: dict = Depends(deps.get_current_user)):
+    sid = str(uuid.uuid4())
+    name = body.name.strip() or "New session"
+    # postgrest-py: insert() returns SyncQueryRequestBuilder (no .select()); default returning=representation returns the row.
+    result = (
+        deps.db.table("sessions")
+        .insert({"id": sid, "user_id": user["user_id"], "name": name})
+        .execute()
+    )
+    if not result.data:
+        log.error("sessions insert returned no rows (check DB schema, RLS, and SUPABASE_KEY)")
+        raise HTTPException(status_code=500, detail="Failed to create session")
+    return result.data[0]
+
+
+@router.get("/sessions")
+def list_sessions(user: dict = Depends(deps.get_current_user)):
+    uid = user["user_id"]
+    result = (
+        deps.db.table("sessions")
+        .select("id, name, created_at")
+        .eq("user_id", uid)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    rows = result.data or []
+    likes_res = (
+        deps.db.table("likes")
+        .select("session_id")
+        .eq("user_id", uid)
+        .execute()
+    )
+    by_session = Counter()
+    for row in likes_res.data or []:
+        sid = row.get("session_id")
+        if sid:
+            by_session[sid] += 1
+    for s in rows:
+        s["like_count"] = by_session.get(s["id"], 0)
+    return rows
+
+
+@router.delete("/session/delete")
+def delete_session(
+    session_id: str = Query(..., min_length=1, description="Session UUID"),
+    user: dict = Depends(deps.get_current_user),
+):
+    """Remove a workspace session. Likes for this session become unscoped (session_id set NULL)."""
+    _assert_session_owned(session_id, user["user_id"])
+    deps.db.table("sessions").delete().eq("id", session_id).eq(
+        "user_id", user["user_id"]
+    ).execute()
+    return {"deleted": True, "session_id": session_id}
 
 
 @router.put("/update_interests")
@@ -134,19 +210,29 @@ def feed(
     user: dict = Depends(deps.get_current_user),
     limit: int = Query(6, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    session_id: str | None = Query(None, description="Scope recommendations to likes in this session"),
 ):
     MIN_SIMILARITY = 0.75
     uid = user["user_id"]
 
-    # Check if user has any likes (determines DB vs arXiv path)
-    likes_check = deps.db.table("likes").select("id", count="exact").eq("user_id", uid).limit(1).execute()
+    if session_id:
+        _assert_session_owned(session_id, uid)
+
+    # Check if user has likes in scope (determines DB vs arXiv path)
+    likes_q = deps.db.table("likes").select("id", count="exact").eq("user_id", uid)
+    if session_id:
+        likes_q = likes_q.eq("session_id", session_id)
+    likes_check = likes_q.limit(1).execute()
     has_likes = bool(likes_check.data)
 
     if has_likes:
-        result = deps.db.rpc(
-            "recommend_papers",
-            {"p_user_id": uid, "p_limit": limit, "p_offset": offset},
-        ).execute()
+        rpc_args: dict = {
+            "p_user_id": uid,
+            "p_limit": limit,
+            "p_offset": offset,
+            "p_session_id": session_id,
+        }
+        result = deps.db.rpc("recommend_papers", rpc_args).execute()
         db_papers = result.data or []
 
         if db_papers:
@@ -170,6 +256,9 @@ def feed(
 
 @router.post("/like")
 def like_paper(body: LikeRequest, user: dict = Depends(deps.get_current_user)):
+    if body.session_id:
+        _assert_session_owned(body.session_id, user["user_id"])
+
     existing = deps.db.table("papers").select("id").eq("id", body.paper_id).execute()
     if not existing.data and body.title:
         from backend.routers.paper import _compute_embedding
@@ -189,21 +278,27 @@ def like_paper(body: LikeRequest, user: dict = Depends(deps.get_current_user)):
         ).execute()
         log.info("[like] inserted missing paper %s", body.paper_id)
 
+    like_row = {
+        "id": str(uuid.uuid4()),
+        "user_id": user["user_id"],
+        "paper_id": body.paper_id,
+        "session_id": body.session_id,
+    }
     result = (
         deps.db.table("likes")
         .upsert(
-            {
-                "id": str(uuid.uuid4()),
-                "user_id": user["user_id"],
-                "paper_id": body.paper_id,
-            },
+            like_row,
             on_conflict="user_id,paper_id",
         )
         .execute()
     )
     if not result.data:
         raise HTTPException(500, "Failed to save like")
-    return result.data[0]
+    return {
+        "liked": True,
+        "paper_id": body.paper_id,
+        "likes": paper_like_total(body.paper_id),
+    }
 
 
 @router.delete("/dislike")
@@ -211,4 +306,8 @@ def dislike_paper(body: LikeRequest, user: dict = Depends(deps.get_current_user)
     deps.db.table("likes").delete().eq("user_id", user["user_id"]).eq(
         "paper_id", body.paper_id
     ).execute()
-    return {"message": "Like removed"}
+    return {
+        "liked": False,
+        "paper_id": body.paper_id,
+        "likes": paper_like_total(body.paper_id),
+    }

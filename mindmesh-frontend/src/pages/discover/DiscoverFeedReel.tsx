@@ -16,7 +16,7 @@ export type DiscoverFeedReelProps = {
   feedWithPromos: ReelItem[]
   selected: Set<string>
   likedPosts: Record<string, boolean>
-  togglePostLike: (postId: string) => void
+  togglePostLike: (post: FeedItem) => void
   displayedLikeCount: (post: FeedItem) => number
   displayedCommentCount: (post: FeedItem) => number
   commentsOpenPostId: string | null
@@ -65,7 +65,14 @@ export function DiscoverFeedReel({
 
   useEffect(() => {
     const el = scrollContainerRef.current
-    if (!el || !onLoadMore || !hasMore || loadingMore) return
+    if (
+      !el ||
+      !onLoadMore ||
+      !hasMore ||
+      loadingMore ||
+      feedWithPromos.length === 0
+    )
+      return
 
     let ticking = false
     const onScroll = () => {
@@ -74,6 +81,7 @@ export function DiscoverFeedReel({
       requestAnimationFrame(() => {
         ticking = false
         if (prefetchTriggered.current) return
+        if (feedWithPromos.length === 0) return
         const itemH = el.clientHeight
         if (itemH <= 0) return
         const currentIdx = Math.round(el.scrollTop / itemH)
@@ -431,9 +439,7 @@ export function DiscoverFeedReel({
                             ? 'Unlike'
                             : 'Like'
                         }
-                        onClick={() =>
-                          togglePostLike(post.id)
-                        }
+                        onClick={() => togglePostLike(post)}
                         className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[0.8125rem] transition-colors ${
                           likedPosts[post.id]
                             ? 'text-rose-600'

@@ -57,6 +57,21 @@ CREATE TABLE IF NOT EXISTS public.papers (
 ALTER TABLE public.papers ENABLE ROW LEVEL SECURITY;
 
 -- ──────────────────────────────────────
+-- Sessions  (scoped workspace / feed context)
+-- ──────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS public.sessions (
+  id         text PRIMARY KEY,
+  user_id    text NOT NULL REFERENCES public.users (id) ON DELETE CASCADE,
+  name       text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS sessions_user_id_idx ON public.sessions (user_id);
+
+ALTER TABLE public.sessions ENABLE ROW LEVEL SECURITY;
+
+-- ──────────────────────────────────────
 -- Likes  (like_count = COUNT from here)
 -- ──────────────────────────────────────
 
@@ -64,11 +79,33 @@ CREATE TABLE IF NOT EXISTS public.likes (
   id         text PRIMARY KEY,
   user_id    text NOT NULL REFERENCES public.users (id) ON DELETE CASCADE,
   paper_id   text NOT NULL REFERENCES public.papers (id) ON DELETE CASCADE,
+  session_id text REFERENCES public.sessions (id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (user_id, paper_id)
 );
 
+-- Existing databases: add session_id if the table was created before this column existed.
+ALTER TABLE public.likes
+  ADD COLUMN IF NOT EXISTS session_id text REFERENCES public.sessions (id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS likes_user_session_idx ON public.likes (user_id, session_id);
+
+CREATE INDEX IF NOT EXISTS likes_paper_id_idx ON public.likes (paper_id);
+
 ALTER TABLE public.likes ENABLE ROW LEVEL SECURITY;
+
+-- Total like count per paper (used by API). SECURITY DEFINER so counts stay correct under RLS.
+CREATE OR REPLACE FUNCTION public.paper_like_count(p_paper_id text)
+RETURNS bigint
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT count(*)::bigint FROM public.likes WHERE paper_id = p_paper_id;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.paper_like_count(text) TO anon, authenticated, service_role;
 
 -- ──────────────────────────────────────
 -- Feed: recommend papers by similarity
@@ -131,10 +168,14 @@ $$;
 -- to the average embedding of liked papers
 -- ──────────────────────────────────────
 
+DROP FUNCTION IF EXISTS public.recommend_papers(text, int, int);
+DROP FUNCTION IF EXISTS public.recommend_papers(text, int, int, text);
+
 CREATE OR REPLACE FUNCTION public.recommend_papers(
   p_user_id text,
   p_limit   int DEFAULT 20,
-  p_offset  int DEFAULT 0
+  p_offset  int DEFAULT 0,
+  p_session_id text DEFAULT NULL
 )
 RETURNS TABLE (
   id          text,
@@ -154,6 +195,7 @@ AS $$
     JOIN public.papers p ON p.id = l.paper_id
     WHERE l.user_id = p_user_id
       AND p.embedding IS NOT NULL
+      AND (p_session_id IS NULL OR l.session_id = p_session_id)
   )
   SELECT
     p.id, p.title, p.summary, p.authors, p.categories,
@@ -163,7 +205,9 @@ AS $$
   WHERE p.embedding IS NOT NULL
     AND u.embedding IS NOT NULL
     AND p.id NOT IN (
-      SELECT paper_id FROM public.likes WHERE user_id = p_user_id
+      SELECT paper_id FROM public.likes l2
+      WHERE l2.user_id = p_user_id
+        AND (p_session_id IS NULL OR l2.session_id = p_session_id)
     )
   ORDER BY p.embedding <=> u.embedding
   LIMIT p_limit

@@ -37,5 +37,3 @@ export type ReelItem =
     }
 
 export type MainPanel = 'feed' | 'discover' | 'authors' | 'likes' | 'arxiv'
-
-export type NewSessionModalStep = 'choose' | 'paper'

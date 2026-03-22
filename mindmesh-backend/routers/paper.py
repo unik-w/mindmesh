@@ -41,6 +41,20 @@ def _is_doi_or_url(q: str) -> bool:
     return q.startswith("10.") or q.startswith("http://") or q.startswith("https://")
 
 
+def paper_like_total(paper_id: str) -> int:
+    """Supabase SQL function `paper_like_count` (see create_tables.sql)."""
+    try:
+        r = deps.db.rpc("paper_like_count", {"p_paper_id": paper_id}).execute()
+        d = r.data
+        # PostgREST sometimes returns a bare number, sometimes a one-element list.
+        if isinstance(d, list) and d:
+            d = d[0]
+        return max(0, int(d))
+    except Exception as exc:
+        log.warning("paper_like_count(%s): %s", paper_id, exc)
+        return 0
+
+
 @router.get("/search")
 def search_papers(
     q: str = Query(..., min_length=1, description="Search query, DOI, or URL"),
@@ -80,6 +94,14 @@ def list_papers(
         .execute()
     )
     return result.data
+
+
+@router.get("/likes")
+def get_paper_like_count(
+    paper_id: str = Query(..., min_length=1, description="Paper id (papers.id)"),
+):
+    """Count rows in `likes` for this paper (global total)."""
+    return {"likes": paper_like_total(paper_id)}
 
 
 @router.post("/insert")

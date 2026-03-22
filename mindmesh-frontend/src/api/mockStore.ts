@@ -44,6 +44,7 @@ function cloneSession(s: SessionSummary): SessionSummary {
     title: s.title,
     meta: s.meta,
     papers: s.papers.map(cloneItem),
+    likeCount: s.likeCount ?? 0,
   }
 }
 
@@ -155,6 +156,8 @@ function searchPapersInternal(query: string): PaperSearchHit[] {
       title: p.title,
       authorLine: p.authorLine,
       meta: p.meta,
+      summary: p.aiSummary || p.paperDetail,
+      likes: p.likes,
     }))
 }
 
@@ -181,7 +184,7 @@ export const mockStore = {
 
   listSessions(): SessionSummary[] {
     return mem.sessions.map((s) => ({
-      ...s,
+      ...cloneSession(s),
       papers: s.papers.map((p) => applyOverlays(cloneItem(p))),
     }))
   },
@@ -198,6 +201,12 @@ export const mockStore = {
       mem.joinedSessionIds.push(sessionId)
       persist()
     }
+  },
+
+  deleteSession(sessionId: string) {
+    mem.sessions = mem.sessions.filter((s) => s.id !== sessionId)
+    mem.joinedSessionIds = mem.joinedSessionIds.filter((id) => id !== sessionId)
+    persist()
   },
 
   setCardLike(cardId: string, liked: boolean): LikeResult {
@@ -298,7 +307,7 @@ export const mockStore = {
       meta = 'You · uploaded'
     }
 
-    const session: SessionSummary = { id, title, meta, papers }
+    const session: SessionSummary = { id, title, meta, papers, likeCount: 0 }
     mem.sessions = [session, ...mem.sessions]
     persist()
     return { session: cloneSession(session) }

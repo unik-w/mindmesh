@@ -5,6 +5,7 @@ import {
   useState,
   type Dispatch,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
   type SetStateAction,
 } from 'react'
 import {
@@ -64,7 +65,9 @@ function arxivPaperToFeedItem(paper: ArxivPaper): FeedItem {
 export type ArxivSearchPanelProps = {
   selected: Set<string>
   likedPosts: Record<string, boolean>
-  togglePostLike: (postId: string) => void
+  togglePostLike: (post: FeedItem) => void
+  /** Merged into arXiv result cards (Discover parent keeps counts after like/unlike). */
+  likeCountsByPaperId?: Record<string, number>
   displayedLikeCount: (post: FeedItem) => number
   displayedCommentCount: (post: FeedItem) => number
   commentsOpenPostId: string | null
@@ -78,6 +81,12 @@ export type ArxivSearchPanelProps = {
     post: FeedItem,
   ) => void
   onOpenPaperVideo?: (post: FeedItem) => void
+  /** Shown below the search bar when the user has not run an arXiv search (e.g. session recommendations). */
+  idleContent?: ReactNode
+  /** Session recommendation feed loading; shown as a single overlay (hidden while an arXiv search is in flight). */
+  sessionFeedLoading?: boolean
+  /** Defaults to true; set false when idle content should keep focus (e.g. recommendation reel). */
+  searchInputAutoFocus?: boolean
 }
 
 export function ArxivSearchPanel({
@@ -94,6 +103,10 @@ export function ArxivSearchPanel({
   submitComment,
   handleCardMainClick,
   onOpenPaperVideo,
+  idleContent,
+  sessionFeedLoading = false,
+  searchInputAutoFocus = true,
+  likeCountsByPaperId = {},
 }: ArxivSearchPanelProps) {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
@@ -244,11 +257,13 @@ export function ArxivSearchPanel({
   const feedItems = useMemo(() => {
     return papers.map((p) => {
       const item = arxivPaperToFeedItem(p)
+      const n = likeCountsByPaperId[p.id]
+      if (typeof n === 'number' && Number.isFinite(n)) item.likes = Math.max(0, n)
       const llm = llmSummaries[p.id]
       if (llm) item.aiSummary = llm
       return item
     })
-  }, [papers, llmSummaries])
+  }, [papers, llmSummaries, likeCountsByPaperId])
 
   const reelItems: ReelItem[] = useMemo(
     () => feedItems.map((post) => ({ kind: 'paper' as const, post })),
@@ -256,6 +271,20 @@ export function ArxivSearchPanel({
   )
 
   const showReel = !loading && searched && papers.length > 0
+  const hasIdleSlot = idleContent != null
+
+  const sessionFeedBusyOverlay =
+    hasIdleSlot && sessionFeedLoading && !loading ? (
+      <div
+        className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-slate-100/60 backdrop-blur-[2px]"
+        role="status"
+        aria-live="polite"
+      >
+        <span className="text-sm font-medium text-slate-600">
+          Updating feed…
+        </span>
+      </div>
+    ) : null
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -278,7 +307,7 @@ export function ArxivSearchPanel({
               className="m-0 w-full border-0 bg-transparent p-0 font-inherit text-sm text-slate-900 outline-none placeholder:text-slate-400"
               placeholder="Search anything on arXiv…"
               autoComplete="off"
-              autoFocus
+              autoFocus={searchInputAutoFocus}
             />
           </div>
           <button
@@ -299,62 +328,95 @@ export function ArxivSearchPanel({
         ) : null}
       </div>
 
-      {loading ? (
-        <div className="flex flex-1 items-center justify-center" role="status">
-          <div className="flex flex-col items-center gap-2">
-            <span
-              className="size-8 rounded-full border-2 border-slate-200 border-t-violet-600 animate-spin"
-              aria-hidden
-            />
-            <span className="text-sm font-medium text-slate-500">
-              Searching arXiv…
-            </span>
-          </div>
-        </div>
-      ) : null}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+        {loading ? (
+          hasIdleSlot ? (
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="pointer-events-none min-h-0 flex-1 opacity-45 select-none">
+                {idleContent}
+              </div>
+              <div
+                className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-100/55 backdrop-blur-[2px]"
+                role="status"
+              >
+                <div className="flex flex-col items-center gap-2">
+                  <span
+                    className="size-8 rounded-full border-2 border-slate-200 border-t-violet-600 animate-spin"
+                    aria-hidden
+                  />
+                  <span className="text-sm font-medium text-slate-600">
+                    Searching arXiv…
+                  </span>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-1 items-center justify-center" role="status">
+              <div className="flex flex-col items-center gap-2">
+                <span
+                  className="size-8 rounded-full border-2 border-slate-200 border-t-violet-600 animate-spin"
+                  aria-hidden
+                />
+                <span className="text-sm font-medium text-slate-500">
+                  Searching arXiv…
+                </span>
+              </div>
+            </div>
+          )
+        ) : null}
 
-      {!loading && searched && total === 0 ? (
-        <div className="flex flex-1 items-center justify-center px-4">
-          <p className="text-sm text-slate-500">
-            No results found — try a different query.
-          </p>
-        </div>
-      ) : null}
-
-      {showReel ? (
-        <DiscoverFeedReel
-          feedWithPromos={reelItems}
-          selected={selected}
-          likedPosts={likedPosts}
-          togglePostLike={togglePostLike}
-          displayedLikeCount={displayedLikeCount}
-          displayedCommentCount={displayedCommentCount}
-          commentsOpenPostId={commentsOpenPostId}
-          toggleCommentsOpen={toggleCommentsOpen}
-          commentDraftByPost={commentDraftByPost}
-          setCommentDraftByPost={setCommentDraftByPost}
-          commentExtras={commentExtras}
-          submitComment={submitComment}
-          handleCardMainClick={handleCardMainClick}
-          onOpenPaperVideo={onOpenPaperVideo}
-          onLoadMore={handleLoadMore}
-          loadingMore={loadingMore}
-          hasMore={hasMore}
-        />
-      ) : null}
-
-      {!loading && !searched ? (
-        <div className="flex flex-1 items-center justify-center px-4">
-          <div className="max-w-xs text-center">
-            <p className="m-0 text-[0.9375rem] font-medium text-slate-500">
-              Search anything on arXiv
-            </p>
-            <p className="mt-1 mb-0 text-[0.8125rem] text-slate-400">
-              Topics, titles, author names, arXiv IDs, or URLs
+        {!loading && searched && total === 0 ? (
+          <div className="flex flex-1 items-center justify-center px-4">
+            <p className="text-sm text-slate-500">
+              No results found — try a different query.
             </p>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+
+        {showReel ? (
+          <DiscoverFeedReel
+            feedWithPromos={reelItems}
+            selected={selected}
+            likedPosts={likedPosts}
+            togglePostLike={togglePostLike}
+            displayedLikeCount={displayedLikeCount}
+            displayedCommentCount={displayedCommentCount}
+            commentsOpenPostId={commentsOpenPostId}
+            toggleCommentsOpen={toggleCommentsOpen}
+            commentDraftByPost={commentDraftByPost}
+            setCommentDraftByPost={setCommentDraftByPost}
+            commentExtras={commentExtras}
+            submitComment={submitComment}
+            handleCardMainClick={handleCardMainClick}
+            onOpenPaperVideo={onOpenPaperVideo}
+            onLoadMore={handleLoadMore}
+            loadingMore={loadingMore}
+            hasMore={hasMore}
+          />
+        ) : null}
+
+        {!loading && !searched ? (
+          hasIdleSlot ? (
+            <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                {idleContent}
+              </div>
+              {sessionFeedBusyOverlay}
+            </div>
+          ) : (
+            <div className="flex flex-1 items-center justify-center px-4">
+              <div className="max-w-xs text-center">
+                <p className="m-0 text-[0.9375rem] font-medium text-slate-500">
+                  Search anything on arXiv
+                </p>
+                <p className="mt-1 mb-0 text-[0.8125rem] text-slate-400">
+                  Topics, titles, author names, arXiv IDs, or URLs
+                </p>
+              </div>
+            </div>
+          )
+        ) : null}
+      </div>
     </div>
   )
 }

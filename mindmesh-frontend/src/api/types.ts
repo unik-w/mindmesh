@@ -7,6 +7,8 @@ export type SessionSummary = {
   title: string
   meta: string
   papers: FeedItem[]
+  /** Likes in this session (from API list); used to choose arXiv vs recommendation feed. */
+  likeCount?: number
 }
 
 export type CardComment = {
@@ -20,6 +22,16 @@ export type LikeResult = {
   liked: boolean
   /** Omitted when the API does not return an aggregate like count. */
   likes?: number
+}
+
+/** Sent with POST /user/like when the paper is not in cache (e.g. arXiv search) so the backend can upsert `papers`. */
+export type LikePaperPayload = {
+  title: string
+  summary?: string | null
+  authors?: string[]
+  categories?: string[]
+  links?: Record<string, unknown>
+  published?: string | null
 }
 
 export type CreateSessionInput = {
@@ -38,6 +50,12 @@ export type PaperSearchHit = {
   title: string
   authorLine: string
   meta: string
+  /** Abstract / summary from DB search (shown as AI summary in the reel). */
+  summary?: string
+  categories?: string[]
+  links?: Record<string, string>
+  /** Display count; updated optimistically when liking from search results. */
+  likes?: number
 }
 
 export type AuthorSearchHit = {
