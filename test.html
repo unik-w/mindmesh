@@ -117,6 +117,33 @@
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
+    .paper-summary.ai-summary {
+      color: #c9d1d9;
+      -webkit-line-clamp: none;
+      display: block;
+    }
+    .ai-badge {
+      display: inline-block;
+      background: #1f6feb33;
+      color: #58a6ff;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-left: 6px;
+      vertical-align: middle;
+      letter-spacing: 0.5px;
+    }
+    .summary-loading {
+      display: inline-block;
+      width: 12px; height: 12px;
+      border: 2px solid #30363d;
+      border-top-color: #58a6ff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
     .paper-meta {
       display: flex;
       align-items: center;
@@ -260,7 +287,7 @@
   </div>
 
 <script>
-const API = "http://127.0.0.1:8000";
+const API = "https://rquyb354t6jc2pjhds3pslng6e0qnxoj.lambda-url.eu-central-1.on.aws";
 const PAGE_SIZE = 20;
 const INTERESTS = [
   "Computer Science","Machine Learning","Artificial Intelligence",
@@ -284,6 +311,16 @@ function showSpinner(el) { el.innerHTML = '<div class="spinner-wrap"><div class=
 
 async function apiFetch(path) {
   const r = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
+
+async function apiPost(path, body) {
+  const r = await fetch(`${API}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
   if (!r.ok) throw new Error(r.status);
   return r.json();
 }
@@ -442,6 +479,46 @@ function updateLikeButtons() {
   });
 }
 
+// ── AI Summaries ─────────────────────
+function _applyBatchSummaries(summaries) {
+  const byId = Object.fromEntries(summaries.map(s => [s.paper_id, s]));
+  document.querySelectorAll(".paper-summary[data-paper-id]").forEach(el => {
+    const s = byId[el.dataset.paperId];
+    if (!s) return;
+    const status = el.closest(".paper-card")?.querySelector(".ai-status");
+    if (s.summary) {
+      el.textContent = s.summary;
+      el.classList.add("ai-summary");
+      if (status) status.innerHTML = '<span class="ai-badge">AI</span>';
+    } else {
+      if (status) status.innerHTML = "";
+    }
+  });
+}
+
+async function fetchAISummaries(papers) {
+  const BATCH = 4;
+  papers.forEach(p => {
+    const card = document.querySelector(`.paper-summary[data-paper-id="${CSS.escape(p.id)}"]`)?.closest(".paper-card");
+    const status = card?.querySelector(".ai-status");
+    if (status) status.innerHTML = '<span class="summary-loading"></span> Generating AI summary\u2026';
+  });
+
+  for (let i = 0; i < papers.length; i += BATCH) {
+    const chunk = papers.slice(i, i + BATCH);
+    try {
+      const data = await apiPost("/llm/feed-summary", { papers: chunk });
+      _applyBatchSummaries(data.summaries);
+    } catch {
+      chunk.forEach(p => {
+        const card = document.querySelector(`.paper-summary[data-paper-id="${CSS.escape(p.id)}"]`)?.closest(".paper-card");
+        const status = card?.querySelector(".ai-status");
+        if (status) status.innerHTML = "";
+      });
+    }
+  }
+}
+
 // ── Render ────────────────────────────
 function renderPapers(papers, append = false) {
   const content = document.getElementById("content");
@@ -450,13 +527,15 @@ function renderPapers(papers, append = false) {
     content.innerHTML = `<div class="empty-state">${msgs[currentTab] || "No papers found."}</div>`;
     return;
   }
+  const isRec = currentTab === "recommended";
   const html = papers.map(p => {
     const liked = likedPaperIds.has(p.id);
     const cats = (p.categories || []).slice(0, 3).map(c => `<span class="category-tag">${esc(c)}</span>`).join("");
     const sim = p.similarity != null ? `<span class="similarity-badge">${(p.similarity*100).toFixed(0)}% match</span>` : "";
+    const aiStatus = isRec ? '<span class="ai-status"></span>' : "";
     return `<div class="paper-card">
-      <div class="paper-title">${esc(p.title)}</div>
-      <div class="paper-summary">${esc(p.summary || "")}</div>
+      <div class="paper-title">${esc(p.title)}${aiStatus}</div>
+      <div class="paper-summary" data-paper-id="${esc(p.id)}">${esc(p.summary || "")}</div>
       <div class="paper-meta">
         <div class="paper-categories">${cats}${sim}</div>
         <button class="like-btn ${liked?"liked":""}" data-paper-id="${esc(p.id)}" onclick="toggleLike('${esc(p.id)}')">${liked?"\u2665 Liked":"\u2661 Like"}</button>
@@ -476,7 +555,11 @@ async function loadMore() {
     else {
       const papers = await loadPage();
       if (papers.length < PAGE_SIZE) hasMore = false;
-      if (papers.length) { renderPapers(papers, true); offset += papers.length; }
+      if (papers.length) {
+        renderPapers(papers, true);
+        offset += papers.length;
+        if (currentTab === "recommended") fetchAISummaries(papers);
+      }
     }
   } catch { hasMore = false; }
   loading = false;
@@ -506,6 +589,7 @@ async function switchTab(tab) {
     hasMore = tab !== "likes" && papers.length >= PAGE_SIZE;
     offset = papers.length;
     renderPapers(papers);
+    if (tab === "recommended" && papers.length) fetchAISummaries(papers);
   } catch { content.innerHTML = '<div class="empty-state">Error loading papers.</div>'; }
 }
 
