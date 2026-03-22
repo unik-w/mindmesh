@@ -362,7 +362,14 @@ export const mockStore = {
       meta = 'You · uploaded'
     }
 
-    const session: SessionSummary = { id, title, meta, papers, likeCount: 0 }
+    const session: SessionSummary = {
+      id,
+      title,
+      meta,
+      papers,
+      likeCount: 0,
+      ...(moreFeed ? { moreFeed } : {}),
+    }
     mem.sessions = [session, ...mem.sessions]
     persist()
     return { session: cloneSession(session) }
@@ -380,7 +387,7 @@ export const mockStore = {
         ? { ...mf, prefetchQueue: rest.map(cloneItem) }
         : undefined
     persist()
-    return take.map((p) => applyOverlays(cloneItem(p)))
+    return take.map((p: FeedItem) => applyOverlays(cloneItem(p)))
   },
 
   uploadPdf(file: File): PdfUploadResult {

@@ -17,11 +17,6 @@ import {
   ROUTES,
   setApiBearerToken,
 } from './httpClient'
-import {
-  loadWorkspaceSessions,
-  prependWorkspaceSession,
-  updateWorkspaceSession,
-} from './localWorkspaceSessions'
 import { mockStore } from './mockStore'
 import type {
   AuthorSearchHit,
@@ -126,6 +121,21 @@ function formatPaperMeta(
     }
   }
   return parts.join(' · ') || 'Paper'
+}
+
+function orderBackendPapersForSeed(
+  papers: BackendPaper[],
+  seedId?: string,
+): BackendPaper[] {
+  const seed = seedId?.trim()
+  if (!seed || papers.length === 0) return papers
+  const idx = papers.findIndex(
+    (p) => p.id === seed || extractArxivId(p) === seed,
+  )
+  if (idx <= 0) return papers
+  const next = [...papers]
+  const [hit] = next.splice(idx, 1)
+  return hit ? [hit, ...next] : papers
 }
 
 function extractArxivId(p: BackendPaper): string | undefined {
@@ -677,15 +687,15 @@ export async function createSession(
       json: { name: derivedName },
     },
   )
-  return {
-    session: {
-      id: row.id,
-      title: row.name,
-      meta: formatSessionListMeta(row.created_at),
-      papers,
-      likeCount: 0,
-    },
+  const session: SessionSummary = {
+    id: row.id,
+    title: row.name,
+    meta: formatSessionListMeta(row.created_at),
+    papers,
+    likeCount: 0,
   }
+  if (moreFeed) session.moreFeed = moreFeed
+  return { session }
 }
 
 export async function getSessionFeed(

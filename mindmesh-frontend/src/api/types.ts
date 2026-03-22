@@ -18,6 +18,8 @@ export type SessionSummary = {
   papers: FeedItem[]
   /** Likes in this session (from API list); used to choose arXiv vs recommendation feed. */
   likeCount?: number
+  /** Prefetch queue for session feed pagination (mock + real API paper search). */
+  moreFeed?: SessionFeedMoreState
 }
 
 export type CardComment = {
