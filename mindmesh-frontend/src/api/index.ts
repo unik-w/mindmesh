@@ -11,6 +11,7 @@ export {
   getPersistedComments,
   joinSession,
   listSessions,
+  loadMoreFeedPapers,
   loginWithGoogleIdToken,
   saveInterests,
   searchAuthors,

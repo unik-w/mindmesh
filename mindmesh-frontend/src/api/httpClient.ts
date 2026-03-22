@@ -11,6 +11,8 @@ export const ROUTES = {
   paperList: '/paper/list',
   paperInsert: '/paper/insert',
   arxivSearch: '/arxiv/search',
+  llmFeedSummary: '/llm/feed-summary',
+  llmPdfAnalysis: '/llm/pdf-analysis',
 } as const
 
 export function getApiBaseUrl(): string {

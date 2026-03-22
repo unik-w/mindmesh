@@ -362,6 +362,60 @@ export async function getPersistedComments(): Promise<
   return {}
 }
 
+const FEED_PAGE_SIZE = 6
+
+type FeedSummaryItem = {
+  paper_id: string
+  title: string
+  summary: string
+  error?: string | null
+}
+
+async function fetchFeedSummaries(
+  papers: BackendPaper[],
+): Promise<FeedSummaryItem[]> {
+  try {
+    const res = await apiFetchJson<{
+      total: number
+      summaries: FeedSummaryItem[]
+    }>(ROUTES.llmFeedSummary, {
+      method: 'POST',
+      json: {
+        papers: papers.map((p) => ({
+          id: p.id,
+          title: p.title,
+          summary: p.summary ?? null,
+          authors: p.authors ?? [],
+          categories: p.categories ?? [],
+          links: p.links ?? null,
+          published: p.published ?? null,
+          similarity: p.similarity ?? null,
+        })),
+      },
+    })
+    return res.summaries ?? []
+  } catch {
+    return []
+  }
+}
+
+function applyLlmSummaries(
+  papers: BackendPaper[],
+  summaries: FeedSummaryItem[],
+): FeedItem[] {
+  const summaryMap = new Map(
+    summaries
+      .filter((s) => s.summary && !s.error)
+      .map((s) => [s.paper_id, s.summary]),
+  )
+  return papers.map((p) => {
+    const item = backendPaperToFeedItem(p)
+    const llm = summaryMap.get(p.id)
+    if (llm) item.aiSummary = llm
+    return item
+  })
+}
+
 export async function getDiscoveryFeed(
   _interestIds: string[],
 ): Promise<FeedItem[]> {
@@ -369,13 +423,29 @@ export async function getDiscoveryFeed(
     await delay()
     return mockStore.getDiscoveryFeed(_interestIds)
   }
-  const limit = 50
   const papers = await apiFetchJson<BackendPaper[]>(
-    `${ROUTES.userFeed}?limit=${limit}&offset=0`,
+    `${ROUTES.userFeed}?limit=${FEED_PAGE_SIZE}&offset=0`,
     { method: 'GET' },
   )
-  if (!Array.isArray(papers)) return []
-  return papers.map(backendPaperToFeedItem)
+  if (!Array.isArray(papers) || papers.length === 0) return []
+  const summaries = await fetchFeedSummaries(papers)
+  return applyLlmSummaries(papers, summaries)
+}
+
+export async function loadMoreFeedPapers(
+  offset: number,
+): Promise<FeedItem[]> {
+  if (isMockApiMode()) {
+    await delay()
+    return []
+  }
+  const papers = await apiFetchJson<BackendPaper[]>(
+    `${ROUTES.userFeed}?limit=${FEED_PAGE_SIZE}&offset=${offset}`,
+    { method: 'GET' },
+  )
+  if (!Array.isArray(papers) || papers.length === 0) return []
+  const summaries = await fetchFeedSummaries(papers)
+  return applyLlmSummaries(papers, summaries)
 }
 
 export async function listSessions(): Promise<SessionSummary[]> {

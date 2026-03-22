@@ -19,6 +19,7 @@ import {
   getUserLikes,
   joinSession,
   listSessions,
+  loadMoreFeedPapers,
   saveInterests,
   searchPapers,
   setCardLike,
@@ -76,8 +77,11 @@ export default function DiscoverPage() {
   const [paperQuery, setPaperQuery] = useState('')
   const accountMenuRef = useRef<HTMLDivElement>(null)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const [likedPosts, setLikedPosts] = useState<Record<string, boolean>>({})
+  const likedPostsRef = useRef(likedPosts)
+  likedPostsRef.current = likedPosts
   const [commentsOpenPostId, setCommentsOpenPostId] = useState<string | null>(
     null,
   )
@@ -98,6 +102,10 @@ export default function DiscoverPage() {
   const [paperHits, setPaperHits] = useState<PaperSearchHit[]>([])
   const [paperSearchLoading, setPaperSearchLoading] = useState(false)
 
+  const [feedOffset, setFeedOffset] = useState(0)
+  const [feedHasMore, setFeedHasMore] = useState(true)
+  const [feedLoadingMore, setFeedLoadingMore] = useState(false)
+
   const selectedInterestKey = useMemo(
     () => [...selected].sort().join(','),
     [selected],
@@ -109,30 +117,45 @@ export default function DiscoverPage() {
     demoProfile.username
 
   const togglePostLike = useCallback((postId: string) => {
-    setLikedPosts((prev) => {
-      const prevLiked = Boolean(prev[postId])
-      const nextLiked = !prevLiked
-      const delta = nextLiked ? 1 : -1
-      setDiscoveryFeedItems((items) =>
-        items.map((p) =>
-          p.id === postId ? { ...p, likes: Math.max(0, p.likes + delta) } : p,
+    const prevLiked = Boolean(likedPostsRef.current[postId])
+    const nextLiked = !prevLiked
+    const delta = nextLiked ? 1 : -1
+
+    setLikedPosts((prev) => ({ ...prev, [postId]: nextLiked }))
+    setDiscoveryFeedItems((items) =>
+      items.map((p) =>
+        p.id === postId ? { ...p, likes: Math.max(0, p.likes + delta) } : p,
+      ),
+    )
+    setWorkspaceSessions((sessions) =>
+      sessions.map((s) => ({
+        ...s,
+        papers: s.papers.map((p) =>
+          p.id === postId
+            ? { ...p, likes: Math.max(0, p.likes + delta) }
+            : p,
         ),
-      )
-      setWorkspaceSessions((sessions) =>
-        sessions.map((s) => ({
-          ...s,
-          papers: s.papers.map((p) =>
+      })),
+    )
+
+    void setCardLike(postId, nextLiked)
+      .then((res) => {
+        setLikedPosts((p) => ({ ...p, [postId]: res.liked }))
+        setDiscoveryFeedItems((items) =>
+          items.map((p) =>
             p.id === postId
-              ? { ...p, likes: Math.max(0, p.likes + delta) }
+              ? {
+                  ...p,
+                  likes:
+                    res.likes !== undefined ? res.likes : p.likes,
+                }
               : p,
           ),
-        })),
-      )
-      void setCardLike(postId, nextLiked)
-        .then((res) => {
-          setLikedPosts((p) => ({ ...p, [postId]: res.liked }))
-          setDiscoveryFeedItems((items) =>
-            items.map((p) =>
+        )
+        setWorkspaceSessions((sessions) =>
+          sessions.map((s) => ({
+            ...s,
+            papers: s.papers.map((p) =>
               p.id === postId
                 ? {
                     ...p,
@@ -141,42 +164,27 @@ export default function DiscoverPage() {
                   }
                 : p,
             ),
-          )
-          setWorkspaceSessions((sessions) =>
-            sessions.map((s) => ({
-              ...s,
-              papers: s.papers.map((p) =>
-                p.id === postId
-                  ? {
-                      ...p,
-                      likes:
-                        res.likes !== undefined ? res.likes : p.likes,
-                    }
-                  : p,
-              ),
-            })),
-          )
-        })
-        .catch(() => {
-          setLikedPosts((p) => ({ ...p, [postId]: prevLiked }))
-          setDiscoveryFeedItems((items) =>
-            items.map((p) =>
-              p.id === postId ? { ...p, likes: Math.max(0, p.likes - delta) } : p,
+          })),
+        )
+      })
+      .catch(() => {
+        setLikedPosts((p) => ({ ...p, [postId]: prevLiked }))
+        setDiscoveryFeedItems((items) =>
+          items.map((p) =>
+            p.id === postId ? { ...p, likes: Math.max(0, p.likes - delta) } : p,
+          ),
+        )
+        setWorkspaceSessions((sessions) =>
+          sessions.map((s) => ({
+            ...s,
+            papers: s.papers.map((p) =>
+              p.id === postId
+                ? { ...p, likes: Math.max(0, p.likes - delta) }
+                : p,
             ),
-          )
-          setWorkspaceSessions((sessions) =>
-            sessions.map((s) => ({
-              ...s,
-              papers: s.papers.map((p) =>
-                p.id === postId
-                  ? { ...p, likes: Math.max(0, p.likes - delta) }
-                  : p,
-              ),
-            })),
-          )
-        })
-      return { ...prev, [postId]: nextLiked }
-    })
+          })),
+        )
+      })
   }, [])
 
   const displayedLikeCount = useCallback((post: FeedItem) => post.likes, [])
@@ -247,6 +255,26 @@ export default function DiscoverPage() {
     }
   }, [selected])
 
+  const handleLoadMore = useCallback(async () => {
+    if (feedLoadingMore || !feedHasMore) return
+    setFeedLoadingMore(true)
+    try {
+      const nextOffset = feedOffset + 6
+      const more = await loadMoreFeedPapers(nextOffset)
+      if (more.length === 0) {
+        setFeedHasMore(false)
+      } else {
+        setDiscoveryFeedItems((prev) => [...prev, ...more])
+        setFeedOffset(nextOffset)
+        if (more.length < 6) setFeedHasMore(false)
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setFeedLoadingMore(false)
+    }
+  }, [feedOffset, feedLoadingMore, feedHasMore])
+
   useEffect(() => {
     if (!supabase) {
       setAuthReady(true)
@@ -282,6 +310,9 @@ export default function DiscoverPage() {
     setActiveSessionId(null)
     setWorkspaceSessions([])
     setDiscoveryFeedItems([])
+    setFeedOffset(0)
+    setFeedHasMore(true)
+    setFeedLoadingMore(false)
     setLikedPosts({})
     setCommentExtras({})
   }, [authReady, authUser])
@@ -318,6 +349,8 @@ export default function DiscoverPage() {
         ])
         if (cancelled) return
         setDiscoveryFeedItems(feed)
+        setFeedOffset(0)
+        setFeedHasMore(feed.length >= 6)
         setWorkspaceSessions(list)
         setLikedPosts(likesMap)
         setCommentExtras(commentsMap)
@@ -482,8 +515,7 @@ export default function DiscoverPage() {
 
   const feedWithPromos = useMemo(() => {
     const selectedKey = [...selected].sort().join(',')
-    const feedKey = prioritizedFeed.map((p) => p.id).join(',')
-    const seed = `${activeSessionId ?? 'discover'}|${selectedKey}|${feedKey}`
+    const seed = `${activeSessionId ?? 'discover'}|${selectedKey}`
     let primaryInterestLabel = 'Research'
     for (const item of INTERESTS) {
       if (selected.has(item.id)) {
@@ -1100,12 +1132,30 @@ export default function DiscoverPage() {
           </div>
         ) : showDiscoverApp ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+            {sidebarOpen && (
+              <div
+                className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm transition-opacity lg:hidden"
+                onClick={() => setSidebarOpen(false)}
+                aria-hidden
+              />
+            )}
             <aside
-              className="flex max-h-[42vh] w-full min-h-0 shrink-0 flex-col overflow-y-auto border-slate-200 bg-[#ececf0] lg:max-h-none lg:h-full lg:min-h-0 lg:w-[260px] lg:shrink-0 lg:border-r"
+              className={`fixed inset-y-0 left-0 z-40 flex h-full w-[280px] flex-col overflow-y-auto border-slate-200 bg-[#ececf0] shadow-xl transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:static lg:z-auto lg:h-full lg:w-[260px] lg:shrink-0 lg:translate-x-0 lg:shadow-none lg:border-r`}
               aria-label="Workspace"
             >
-              <div className="shrink-0 px-3 pt-3 pb-2">
+              <div className="flex shrink-0 items-center justify-between px-3 pt-3 pb-2">
                 <MindMeshWordmark />
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen(false)}
+                  className="flex size-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200/70 lg:hidden"
+                  aria-label="Close sidebar"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <line x1="18" x2="6" y1="6" y2="18" />
+                    <line x1="6" x2="18" y1="6" y2="18" />
+                  </svg>
+                </button>
               </div>
               <div className="flex flex-col gap-1 p-2 pt-0">
                 <button
@@ -1115,6 +1165,7 @@ export default function DiscoverPage() {
                     setMainPanel((p) =>
                       p === 'discover' ? 'feed' : 'discover',
                     )
+                    setSidebarOpen(false)
                   }}
                   className={`${sidebarNavBtn} ${mainPanel === 'discover' ? sidebarNavBtnActive : sidebarNavBtnIdle}`}
                 >
@@ -1128,6 +1179,7 @@ export default function DiscoverPage() {
                   onClick={() => {
                     setActiveSessionId(null)
                     setMainPanel((p) => (p === 'authors' ? 'discover' : 'authors'))
+                    setSidebarOpen(false)
                   }}
                   className={`${sidebarNavBtn} ${mainPanel === 'authors' ? sidebarNavBtnActive : sidebarNavBtnIdle}`}
                 >
@@ -1151,6 +1203,7 @@ export default function DiscoverPage() {
                     setNewSessionStep('choose')
                     setPaperQuery('')
                     setPaperHits([])
+                    setSidebarOpen(false)
                   }}
                   className={`${sidebarNavBtn} ${sidebarNavBtnIdle} mb-1.5 font-medium text-slate-800`}
                 >
@@ -1174,6 +1227,7 @@ export default function DiscoverPage() {
                             void joinSession(s.id)
                             setMainPanel('feed')
                             setActiveSessionId(s.id)
+                            setSidebarOpen(false)
                           }}
                           className={`${sessionRowBtn} ${isActive ? sessionRowActive : ''}`}
                           title={s.meta}
@@ -1260,6 +1314,18 @@ export default function DiscoverPage() {
             </aside>
 
             <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-100/95">
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen(true)}
+                  className="absolute left-3 top-3 z-20 flex size-10 items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 shadow-sm backdrop-blur-sm transition-colors hover:bg-white lg:hidden"
+                  aria-label="Open sidebar"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <line x1="3" x2="21" y1="6" y2="6" />
+                    <line x1="3" x2="21" y1="12" y2="12" />
+                    <line x1="3" x2="21" y1="18" y2="18" />
+                  </svg>
+                </button>
                 <div
                   className="pointer-events-none absolute inset-0 opacity-100"
                   aria-hidden
@@ -1296,6 +1362,9 @@ export default function DiscoverPage() {
                         commentExtras={commentExtras}
                         submitComment={submitComment}
                         handleCardMainClick={handleCardMainClick}
+                        onLoadMore={handleLoadMore}
+                        loadingMore={feedLoadingMore}
+                        hasMore={feedHasMore}
                       />
                     </div>
                   ) : null}

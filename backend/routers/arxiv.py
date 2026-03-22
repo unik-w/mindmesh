@@ -74,7 +74,7 @@ def _extract_arxiv_id(q: str) -> str | None:
 def search_arxiv(
     q: str = Query(..., min_length=1, description="Search query, arXiv URL, or arXiv ID"),
     start: int = Query(0, ge=0, description="Pagination offset"),
-    max_results: int = Query(20, ge=1, le=100, description="Number of results"),
+    max_results: int = Query(6, ge=1, le=100, description="Number of results"),
     _user: dict = Depends(deps.get_current_user),
 ):
     arxiv_id = _extract_arxiv_id(q)
