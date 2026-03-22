@@ -16,7 +16,7 @@ const pillars: {
 }[] = [
   {
     title: 'AI that learns you',
-    body: 'Recommendations sharpen from every paper you open, save, and skip no manual tuning, just a feed that gets sharper as you scroll.',
+    body: 'Recommendations sharpen from every preprint you open, save, and skip no manual tuning, just a feed that gets sharper as you scroll.',
     highlight: true,
   },
   {
@@ -25,14 +25,14 @@ const pillars: {
   },
   {
     title: 'One home base',
-    body: 'Papers, people, events, jobs, and sponsors in a single flow.',
+    body: 'Preprints, Collaborators, jobs, funders, funding, and events in a single flow.',
   },
 ]
 
 const features = [
   {
     title: 'A feed that stays relevant',
-    desc: 'New papers and trending work in your field plus nearby conference cards and curated roles matched to your interests without the endless query loop.',
+    desc: 'New preprints and trending work in your field plus nearby conference cards and curated roles matched to your interests without the endless query loop.',
   },
   {
     title: 'A graph for your domain',
@@ -44,13 +44,13 @@ const features = [
   },
   {
     title: 'Room to collaborate',
-    desc: 'Comments, shares, project workspaces, and verified sponsorship when you want to go bigger.',
+    desc: 'Comments, shares, project workspaces, and verified funders, funding, and events when you want to go bigger.',
   },
 ]
 
 const sessionBullets = [
   'Literature that updates as your thread evolves',
-  'Collaborators, notes, and comments on papers',
+  'Collaborators, notes, and comments on preprints',
   'Gaps, drafts, and proposals in one workspace',
 ]
 
@@ -96,7 +96,7 @@ export default function HomePage() {
                 in one feed built for how you actually read.
               </p>
               <p className="mb-7 mt-0 text-[1.0625rem] leading-[1.62] text-foreground">
-                Papers and people, plus nearby conference cards and curated
+                Preprints and Collaborators, plus nearby conference cards and curated
                 roles when they fit your interests.{' '}
                 <span className={`font-semibold ${gradientText}`}>
                   AI that learns you
@@ -136,7 +136,7 @@ export default function HomePage() {
             </div>
             <aside
               className="relative m-0 w-full max-w-none min-[801px]:max-w-[380px]"
-              aria-label="Preview of the research feed with scrolling sample papers"
+              aria-label="Preview of the research feed with scrolling sample preprints"
             >
               <div
                 className="absolute -inset-px rounded-[1.15rem] bg-linear-to-br from-cyan-400/40 via-blue-500/25 to-violet-500/35 blur-[1px]"
@@ -203,7 +203,7 @@ export default function HomePage() {
                 Everything in one flow
               </h2>
               <p className="m-0 text-[0.98rem] leading-[1.55] text-foreground">
-                Like a social layer for papers plus an assistant that learns your
+                Like a social layer for preprints plus an assistant that learns your
                 domain and your habits, with curated events and roles when they
                 match where you are.
               </p>
@@ -224,7 +224,7 @@ export default function HomePage() {
               ))}
             </div>
             <p className="mx-auto mt-7 mb-0 max-w-2xl text-center text-[0.86rem] leading-normal text-muted">
-              More people on MindMesh → sharper recommendations → richer
+              More Collaborators on MindMesh → sharper recommendations → richer
               opportunities for everyone.
             </p>
           </div>
@@ -263,12 +263,12 @@ export default function HomePage() {
                 <div className="flex items-baseline justify-between gap-3 border-b border-border px-4 py-3.5 text-[0.88rem] font-semibold text-heading">
                   <span>Session · Climate risk</span>
                   <span className="text-[0.8rem] font-medium text-muted">
-                    6 people
+                    6 Collaborators
                   </span>
                 </div>
                 <ul className="m-0 list-none p-0">
                   <li className="flex justify-between gap-3 border-b border-border px-4 py-3 text-[0.82rem] text-foreground last:border-b-0">
-                    <span className="font-medium text-muted">Papers</span>
+                    <span className="font-medium text-muted">Preprints</span>
                     <span>24 auto-curated</span>
                   </li>
                   <li className="flex justify-between gap-3 border-b border-border px-4 py-3 text-[0.82rem] text-foreground last:border-b-0">
