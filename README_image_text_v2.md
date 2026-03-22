@@ -23,11 +23,21 @@ MindMesh addresses this by introducing an intelligent pipeline that:
 * Retrieves relevant research papers from external sources
 * Processes and structures key information
 * Generates high-signal summaries using LLMs
+* Converts insights into audio for on-the-go consumption
+* Surfaces relevant research jobs and upcoming conferences
 
 ---
 ## 📱 Screenshorts
 
+![homepage](https://github.com/user-attachments/assets/c21f910d-47a8-44bf-ba94-25cb8cd7fd37)
 
+![Topic Selection](https://github.com/user-attachments/assets/da39862f-2c66-4c52-8c84-a30b937a2d2d)
+
+![feed](https://github.com/user-attachments/assets/80ef1ecc-4636-4606-8ade-4e924affaf21)
+
+![get in touch](https://github.com/user-attachments/assets/33ebb757-8b8f-44d4-968d-bc04110547c0)
+
+![related](https://github.com/user-attachments/assets/67e627eb-d6dd-4a20-ba1e-b3ccdce7a098)
 
 ---
 
@@ -107,6 +117,7 @@ MindMesh is built around a modular pipeline that separates retrieval, processing
 
 * 🔍 Research paper retrieval from ArXiv
 * 🧠 LLM-based summarization and interpretation
+* 📡 Research jobs and conference tracking
 * 🧩 Structured and enriched responses
 * ⚡ Scalable API-driven backend
 
@@ -114,7 +125,7 @@ MindMesh is built around a modular pipeline that separates retrieval, processing
 
 ## 🛠️ Tech Stack
 * **Frontend**: Vite 
-* **Backend**: FastAPI, Superbase, Google Auth
+* **Backend**: FastAPI, Hugging Face,Superbase
 * **Cloud Computing**: AWS
 * **LLM Layer**: LLaMA (configurable)
 * **Data Source**: ArXiv API
