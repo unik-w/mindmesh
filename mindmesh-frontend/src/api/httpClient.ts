@@ -13,6 +13,7 @@ export const ROUTES = {
   arxivSearch: '/arxiv/search',
   arxivMore: '/arxiv/more',
   llmFeedSummary: '/llm/feed-summary',
+  llmPdfAnalysis: '/llm/pdf-analysis',
 } as const
 
 export function getApiBaseUrl(): string {

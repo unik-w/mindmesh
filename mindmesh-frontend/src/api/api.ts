@@ -416,6 +416,27 @@ export type FeedSummaryItem = {
   error?: string | null
 }
 
+export type ResearchDirection = {
+  question: string
+  explanation: string
+}
+
+export type PdfAnalysisResult = {
+  title: string
+  description_paragraphs: string[]
+  research_directions: ResearchDirection[]
+}
+
+export async function analyzePdf(
+  pdfUrl: string,
+  title?: string,
+): Promise<PdfAnalysisResult> {
+  return apiFetchJson<PdfAnalysisResult>(ROUTES.llmPdfAnalysis, {
+    method: 'POST',
+    json: { pdf_url: pdfUrl, title: title ?? null },
+  })
+}
+
 export async function fetchFeedSummaries(
   papers: { id: string; title: string; summary?: string | null; authors?: string[] | null; categories?: string[] | null; links?: Record<string, string> | null; published?: string | null; similarity?: number | null }[],
 ): Promise<FeedSummaryItem[]> {

@@ -1,5 +1,6 @@
 export {
   addCardComment,
+  analyzePdf,
   clearMindMeshApiSession,
   createSession,
   fetchFeedSummaries,
@@ -28,7 +29,7 @@ export {
   uploadPdf,
 } from './api'
 export { ApiHttpError, getApiBaseUrl, isMockApiMode } from './httpClient'
-export type { ArxivMoreResult, ArxivPaper, ArxivSearchResult, FeedSummaryItem, LikedPaper } from './api'
+export type { ArxivMoreResult, ArxivPaper, ArxivSearchResult, FeedSummaryItem, LikedPaper, PdfAnalysisResult, ResearchDirection } from './api'
 export type {
   AuthorSearchHit,
   CardComment,

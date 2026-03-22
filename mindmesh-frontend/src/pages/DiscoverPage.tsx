@@ -24,7 +24,9 @@ import {
   searchPapers,
   setCardLike,
   syncMindMeshAuth,
+  analyzePdf,
 } from '../api'
+import type { PdfAnalysisResult, FeedSummaryItem } from '../api'
 import {
   supabaseAccountInitials,
   supabaseAvatarUrl,
@@ -55,7 +57,6 @@ import {
 } from './discover/discoverNavStyles'
 import { interleaveFeedPromos } from './discover/feedPromos'
 import { relatedPapersFor } from './discover/relatedPapers'
-import type { FeedSummaryItem } from '../api'
 import type { PaperSearchHit, SessionSummary } from '../api/types'
 import type { FeedItem, MainPanel, NewSessionModalStep } from './discover/types'
 import {
@@ -99,6 +100,8 @@ export default function DiscoverPage() {
     Record<string, { id: string; author: string; body: string }[]>
   >({})
   const [paperSheetPost, setPaperSheetPost] = useState<FeedItem | null>(null)
+  const [pdfAnalysis, setPdfAnalysis] = useState<PdfAnalysisResult | null>(null)
+  const [pdfAnalysisLoading, setPdfAnalysisLoading] = useState(false)
 
   const [workspaceSessions, setWorkspaceSessions] = useState<SessionSummary[]>(
     [],
@@ -245,6 +248,8 @@ export default function DiscoverPage() {
   const closePaperSheet = useCallback(() => {
     stopElevenLabsPlayback()
     setPaperSheetPost(null)
+    setPdfAnalysis(null)
+    setPdfAnalysisLoading(false)
   }, [])
 
   const handleCardMainClick = useCallback(
@@ -604,6 +609,21 @@ export default function DiscoverPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [paperSheetPost, closePaperSheet])
 
+  useEffect(() => {
+    if (!paperSheetPost) return
+    let cancelled = false
+    setPdfAnalysis(null)
+    setPdfAnalysisLoading(true)
+    const pdfUrl = arxivPdfUrl(paperSheetPost)
+    void analyzePdf(pdfUrl, paperSheetPost.title)
+      .then((result) => {
+        if (!cancelled) setPdfAnalysis(result)
+      })
+      .catch(() => { /* silently fall back to static text */ })
+      .finally(() => { if (!cancelled) setPdfAnalysisLoading(false) })
+    return () => { cancelled = true }
+  }, [paperSheetPost])
+
   const interestsModal =
     authUser && phase === 'interests' ? (
       <div className="fixed inset-0 z-10000 flex items-end justify-center p-4 pb-6 sm:items-center sm:pb-4">
@@ -777,33 +797,75 @@ export default function DiscoverPage() {
                   Detailed explanation
                 </h3>
                 <SummarySpeechButton
-                  text={paperDetailText(paperSheetPost)}
+                  text={pdfAnalysis ? pdfAnalysis.description_paragraphs.join('\n\n') : paperDetailText(paperSheetPost)}
                   className="-mr-1 -mt-0.5 text-slate-600"
                 />
               </div>
-              <div className="mt-2 space-y-2.5 text-[0.9rem] leading-relaxed text-slate-700">
-                {paperDetailText(paperSheetPost)
-                  .split('\n\n')
-                  .map((para, i) => (
+              {pdfAnalysisLoading ? (
+                <div className="mt-3 flex items-center gap-2.5 text-[0.8125rem] text-slate-500">
+                  <span className="size-4 rounded-full border-2 border-slate-200 border-t-violet-500 animate-spin shrink-0" aria-hidden />
+                  Generating detailed analysis from PDF…
+                </div>
+              ) : pdfAnalysis ? (
+                <div className="mt-2 space-y-2.5 text-[0.9rem] leading-relaxed text-slate-700">
+                  {pdfAnalysis.description_paragraphs.map((para, i) => (
                     <p key={`pd-${paperSheetPost.id}-${i}`} className="m-0 wrap-anywhere">
                       {para}
                     </p>
                   ))}
-              </div>
+                </div>
+              ) : (
+                <div className="mt-2 space-y-2.5 text-[0.9rem] leading-relaxed text-slate-700">
+                  {paperDetailText(paperSheetPost)
+                    .split('\n\n')
+                    .map((para, i) => (
+                      <p key={`pd-${paperSheetPost.id}-${i}`} className="m-0 wrap-anywhere">
+                        {para}
+                      </p>
+                    ))}
+                </div>
+              )}
             </section>
+
+            {pdfAnalysis && pdfAnalysis.research_directions.length > 0 ? (
+              <section className="mt-8" aria-labelledby="research-directions-heading">
+                <h3
+                  id="research-directions-heading"
+                  className="m-0 text-[0.8125rem] font-semibold tracking-wide text-slate-800"
+                >
+                  Research directions
+                </h3>
+                <ul className="m-0 mt-3 list-none space-y-3 p-0">
+                  {pdfAnalysis.research_directions.map((d, i) => (
+                    <li
+                      key={i}
+                      className="rounded-xl border border-slate-200/80 bg-slate-50/80 px-4 py-3"
+                    >
+                      <p className="m-0 text-[0.875rem] font-semibold leading-snug text-slate-900">
+                        {d.question}
+                      </p>
+                      {d.explanation ? (
+                        <p className="mt-1 mb-0 text-[0.8125rem] leading-snug text-slate-600 wrap-anywhere">
+                          {d.explanation}
+                        </p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
 
             <section className="mt-8" aria-labelledby="sponsor-heading">
               <h3
                 id="sponsor-heading"
                 className="m-0 text-[0.8125rem] font-semibold tracking-wide text-slate-800"
               >
-                Sponsor this paper
+                Fund or collaborate on this research
               </h3>
               <div className="mt-3 rounded-2xl border border-violet-200/80 bg-linear-to-br from-cyan-500/12 via-white to-violet-500/10 px-4 py-4 shadow-sm ring-1 ring-violet-500/15 sm:px-5">
                 <p className="m-0 text-[0.875rem] leading-relaxed text-slate-700">
-                  Sponsorship here is for people who want this research to keep
-                  going—whether you are cheering from the sidelines or investing
-                  in outcomes.
+                  Support the people behind this research—whether you want to fund
+                  the next steps or collaborate directly with the team.
                 </p>
                 <ul className="mt-3 mb-1 list-none space-y-3 p-0 text-[0.8125rem] leading-relaxed text-slate-600">
                   <li>
@@ -832,7 +894,7 @@ export default function DiscoverPage() {
                   type="button"
                   className={`${btnPrimary} w-full justify-center px-5 py-2.5 text-[0.875rem] sm:w-auto`}
                 >
-                  Talk to us about sponsoring
+                  Get in touch
                 </button>
               </div>
             </section>
