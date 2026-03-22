@@ -44,13 +44,35 @@ required = (
     "SUPABASE_KEY",
     "GOOGLE_CLIENT_ID",
     "JWT_SECRET",
-    "FEATHERLESS_API_KEY",
 )
 missing = [k for k in required if not data.get(k)]
 if missing:
     raise SystemExit(f".env missing or empty: {', '.join(missing)}")
 
-print(json.dumps({"Variables": {k: data[k] for k in required}}))
+if not (
+    (data.get("LLM_API_KEY") or "").strip()
+    or (data.get("FEATHERLESS_API_KEY") or "").strip()
+    or (data.get("OPENAI_API_KEY") or "").strip()
+):
+    raise SystemExit(
+        ".env missing LLM key: set LLM_API_KEY, FEATHERLESS_API_KEY, or OPENAI_API_KEY"
+    )
+
+variables = {k: data[k] for k in required}
+for k in (
+    "LLM_API_KEY",
+    "FEATHERLESS_API_KEY",
+    "OPENAI_API_KEY",
+    "LLM_BASE_URL",
+    "FEATHERLESS_BASE_URL",
+    "LLM_MODEL",
+    "FEATHERLESS_MODEL",
+):
+    v = (data.get(k) or "").strip()
+    if v:
+        variables[k] = v
+
+print(json.dumps({"Variables": variables}))
 PY
 )
 

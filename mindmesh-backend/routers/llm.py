@@ -16,19 +16,42 @@ log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/llm", tags=["LLM"])
 
-FEATHERLESS_BASE_URL = os.getenv("FEATHERLESS_BASE_URL", "https://api.featherless.ai/v1")
-FEATHERLESS_MODEL = os.getenv(
-    "FEATHERLESS_MODEL", "meta-llama/Meta-Llama-3.1-8B-Instruct"
-)
+# OpenAI-compatible HTTP API (Featherless, OpenAI, Azure OpenAI path-style, etc.)
+_DEFAULT_LLM_BASE_URL = "https://api.featherless.ai/v1"
+_DEFAULT_LLM_MODEL = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+
 MAX_LLM_CONCURRENCY = 3
 PDF_MAX_CHARS = 15_000
 
 
+def _llm_api_key() -> str | None:
+    for name in ("LLM_API_KEY", "FEATHERLESS_API_KEY", "OPENAI_API_KEY"):
+        v = (os.getenv(name) or "").strip()
+        if v:
+            return v
+    return None
+
+
+def _llm_base_url() -> str:
+    u = (os.getenv("LLM_BASE_URL") or os.getenv("FEATHERLESS_BASE_URL") or "").strip()
+    if u:
+        return u.rstrip("/")
+    return _DEFAULT_LLM_BASE_URL.rstrip("/")
+
+
+def _llm_model() -> str:
+    m = (os.getenv("LLM_MODEL") or os.getenv("FEATHERLESS_MODEL") or "").strip()
+    return m or _DEFAULT_LLM_MODEL
+
+
 def _get_llm_client() -> AsyncOpenAI:
-    api_key = os.getenv("FEATHERLESS_API_KEY")
+    api_key = _llm_api_key()
     if not api_key:
-        raise HTTPException(500, "Missing FEATHERLESS_API_KEY")
-    return AsyncOpenAI(api_key=api_key, base_url=FEATHERLESS_BASE_URL)
+        raise HTTPException(
+            500,
+            "Missing LLM API key: set LLM_API_KEY, FEATHERLESS_API_KEY, or OPENAI_API_KEY",
+        )
+    return AsyncOpenAI(api_key=api_key, base_url=_llm_base_url())
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +116,7 @@ async def _summarize_one_paper(
 
     try:
         completion = await client.chat.completions.create(
-            model=FEATHERLESS_MODEL,
+            model=_llm_model(),
             messages=[
                 {
                     "role": "system",
@@ -299,7 +322,7 @@ async def analyze_pdf(
 
     try:
         completion = await client.chat.completions.create(
-            model=FEATHERLESS_MODEL,
+            model=_llm_model(),
             messages=[
                 {
                     "role": "system",
