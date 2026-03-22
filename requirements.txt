@@ -1,0 +1,16 @@
+# SPECTER++ + SPECTER2 adapter
+# adapters 1.x expects transformers 4.x (5.x may not resolve cleanly).
+torch>=2.2
+transformers>=4.40,<5
+adapters>=1.0.1
+tqdm>=4.66
+supabase>=2
+psycopg[binary]>=3.1
+python-dotenv>=1.0
+
+# Backend API
+fastapi>=0.115
+uvicorn>=0.34
+google-auth>=2.29
+requests>=2.31
+PyJWT>=2.8
