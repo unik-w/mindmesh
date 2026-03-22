@@ -14,6 +14,7 @@ from transformers import AutoTokenizer
 
 from backend import deps
 from backend.routers import auth, user, paper, arxiv
+from backend import llm
 
 load_dotenv()
 
@@ -56,3 +57,4 @@ app.include_router(auth.router)
 app.include_router(user.router)
 app.include_router(paper.router)
 app.include_router(arxiv.router)
+app.include_router(llm.router)
