@@ -86,10 +86,10 @@ export function PaperVideoDialog({ post, onClose }: PaperVideoDialogProps) {
   }, [onClose, teardown])
 
   useEffect(() => {
-    if (isMock) {
-      setPhase('mock')
-      return
-    }
+    // if (isMock) {
+    //   // setPhase('mock')
+    //   return
+    // }
 
     let cancelled = false
     void (async () => {
@@ -113,7 +113,7 @@ export function PaperVideoDialog({ post, onClose }: PaperVideoDialogProps) {
         })
         roomRef.current = room
 
-        room.on(RoomEvent.TrackSubscribed, (track) => {
+        room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
           attachRemoteTrack(
             track,
             videoRef.current,
@@ -221,7 +221,7 @@ export function PaperVideoDialog({ post, onClose }: PaperVideoDialogProps) {
         </div>
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3 sm:px-5 [scrollbar-width:thin]">
-          <p className="m-0 text-[0.8125rem] leading-relaxed text-slate-600">
+          {/* <p className="m-0 text-[0.8125rem] leading-relaxed text-slate-600">
             A disposable agent is created with this paper’s summary as context,
             then connects over LiveKit for real-time avatar video (speech-to-video,
             not a pre-rendered file). See{' '}
@@ -234,7 +234,7 @@ export function PaperVideoDialog({ post, onClose }: PaperVideoDialogProps) {
               docs.bey.dev
             </a>
             .
-          </p>
+          </p> */}
           {setupNote ? (
             <p className="m-0 rounded-lg border border-amber-200/90 bg-amber-50/90 px-3 py-2 text-[0.78rem] text-amber-950">
               {setupNote}

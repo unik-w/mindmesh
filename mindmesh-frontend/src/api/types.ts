@@ -2,6 +2,15 @@ import type { FeedItem } from '../pages/discover/types'
 
 export type { FeedItem }
 
+/** Cursor for loading more papers into a workspace session (real API: search + prefetch queue). */
+export type SessionFeedMoreState = {
+  q: string
+  nextApiOffset: number
+  pageSize: number
+  prefetchQueue: FeedItem[]
+  apiExhausted: boolean
+}
+
 export type SessionSummary = {
   id: string
   title: string
@@ -38,6 +47,8 @@ export type CreateSessionInput = {
   title?: string
   source: 'paper' | 'pdf'
   paperQuery?: string
+  /** When set, that hit is pinned first; feed continues with search + infinite scroll. */
+  seedPaperId?: string
   fileMeta?: { name: string }
 }
 

@@ -24,6 +24,7 @@ import {
   joinSession,
   listSessions,
   loadMoreFeedPapers,
+  loadMoreSessionPapers,
   saveInterests,
   setCardLike,
   syncMindMeshAuth,
@@ -131,6 +132,8 @@ export default function DiscoverPage() {
   const [commentDraftByPost, setCommentDraftByPost] = useState<
     Record<string, string>
   >({})
+  const commentDraftByPostRef = useRef(commentDraftByPost)
+  commentDraftByPostRef.current = commentDraftByPost
   const [commentExtras, setCommentExtras] = useState<
     Record<string, { id: string; author: string; body: string }[]>
   >({})
@@ -152,6 +155,7 @@ export default function DiscoverPage() {
   const [feedOffset, setFeedOffset] = useState(0)
   const [feedHasMore, setFeedHasMore] = useState(true)
   const [feedLoadingMore, setFeedLoadingMore] = useState(false)
+  const [sessionFeedLoadingMore, setSessionFeedLoadingMore] = useState(false)
 
   const [sessionFeedItems, setSessionFeedItems] = useState<FeedItem[]>([])
   const [sessionFeedLoading, setSessionFeedLoading] = useState(false)
@@ -294,16 +298,26 @@ export default function DiscoverPage() {
 
   const submitComment = useCallback(
     (postId: string) => {
-      setCommentDraftByPost((draftState) => {
-        const body = (draftState[postId] ?? '').trim()
-        if (!body) return draftState
-        void addCardComment(postId, body, commentAuthorName).then((row) => {
-          setCommentExtras((prev) => ({
-            ...prev,
-            [postId]: [...(prev[postId] ?? []), row],
-          }))
-          setDiscoveryFeedItems((prev) =>
-            prev.map((p) =>
+      const body = (commentDraftByPostRef.current[postId] ?? '').trim()
+      if (!body) return
+      setCommentDraftByPost((draftState) => ({
+        ...draftState,
+        [postId]: '',
+      }))
+      void addCardComment(postId, body, commentAuthorName).then((row) => {
+        setCommentExtras((prev) => ({
+          ...prev,
+          [postId]: [...(prev[postId] ?? []), row],
+        }))
+        setDiscoveryFeedItems((prev) =>
+          prev.map((p) =>
+            p.id === postId ? { ...p, comments: p.comments + 1 } : p,
+          ),
+        )
+        setWorkspaceSessions((prev) =>
+          prev.map((s) => ({
+            ...s,
+            papers: s.papers.map((p) =>
               p.id === postId ? { ...p, comments: p.comments + 1 } : p,
             ),
           )
@@ -334,15 +348,17 @@ export default function DiscoverPage() {
     setPdfAnalysisLoading(false)
   }, [])
 
-  const handleRequestPdfAnalysis = useCallback(() => {
-    if (!paperSheetPost || pdfAnalysisLoading || pdfAnalysis) return
+  useEffect(() => {
+    if (!paperSheetPost) return
+    let cancelled = false
+    setPdfAnalysis(null)
     setPdfAnalysisLoading(true)
-    const pdfUrl = arxivPdfUrl(paperSheetPost)
-    void analyzePdf(pdfUrl, paperSheetPost.title)
-      .then((result) => setPdfAnalysis(result))
-      .catch(() => { /* fall back to static text silently */ })
-      .finally(() => setPdfAnalysisLoading(false))
-  }, [paperSheetPost, pdfAnalysisLoading, pdfAnalysis])
+    void analyzePdf(arxivPdfUrl(paperSheetPost), paperSheetPost.title)
+      .then((result) => { if (!cancelled) setPdfAnalysis(result) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setPdfAnalysisLoading(false) })
+    return () => { cancelled = true }
+  }, [paperSheetPost])
 
   const handleCardMainClick = useCallback(
     (e: ReactMouseEvent<HTMLDivElement>, post: FeedItem) => {
@@ -371,6 +387,12 @@ export default function DiscoverPage() {
       /* ignore */
     }
   }, [selected])
+
+  const sessionFeedHasMore = useMemo(() => {
+    if (!activeSessionId) return false
+    const s = workspaceSessions.find((x) => x.id === activeSessionId)
+    return Boolean(s?.moreFeed)
+  }, [activeSessionId, workspaceSessions])
 
   const handleLoadMore = useCallback(async () => {
     if (activeSessionId && sessionRecoMode) {
@@ -699,6 +721,13 @@ export default function DiscoverPage() {
     [activeSessionId],
   )
 
+  useEffect(() => {
+    if (!selectedSeedPaperId) return
+    if (!paperHits.some((h) => h.id === selectedSeedPaperId)) {
+      setSelectedSeedPaperId(null)
+    }
+  }, [paperHits, selectedSeedPaperId])
+
   const prioritizedFeed = useMemo(() => {
     if (discoveryFeedItems.length > 0) {
       return [...discoveryFeedItems]
@@ -982,27 +1011,15 @@ export default function DiscoverPage() {
                   ))}
                 </div>
               ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={handleRequestPdfAnalysis}
-                    className="mt-3 flex items-center gap-2 rounded-lg border border-violet-200/80 bg-violet-50/70 px-3.5 py-2 text-[0.8125rem] font-medium text-violet-700 transition-colors hover:bg-violet-100/70"
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                      <path d="M9.663 17h4.673M12 3v1m6.364 1.636-.707.707M21 12h-1M4 12H3m3.343-5.657-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                    </svg>
-                    Generate detailed analysis from PDF
-                  </button>
-                  <div className="mt-3 space-y-2.5 text-[0.9rem] leading-relaxed text-slate-700">
-                    {paperDetailText(paperSheetPost)
-                      .split('\n\n')
-                      .map((para, i) => (
-                        <p key={`pd-${paperSheetPost.id}-${i}`} className="m-0 wrap-anywhere">
-                          {para}
-                        </p>
-                      ))}
-                  </div>
-                </>
+                <div className="mt-2 space-y-2.5 text-[0.9rem] leading-relaxed text-slate-700">
+                  {paperDetailText(paperSheetPost)
+                    .split('\n\n')
+                    .map((para, i) => (
+                      <p key={`pd-${paperSheetPost.id}-${i}`} className="m-0 wrap-anywhere">
+                        {para}
+                      </p>
+                    ))}
+                </div>
               )}
             </section>
 
@@ -1659,8 +1676,14 @@ export default function DiscoverPage() {
                         handleCardMainClick={handleCardMainClick}
                         onOpenPaperVideo={openPaperVideo}
                         onLoadMore={handleLoadMore}
-                        loadingMore={feedLoadingMore}
-                        hasMore={feedHasMore}
+                        loadingMore={
+                          activeSessionId
+                            ? sessionFeedLoadingMore
+                            : feedLoadingMore
+                        }
+                        hasMore={
+                          activeSessionId ? sessionFeedHasMore : feedHasMore
+                        }
                       />
                     </div>
                   ) : null}

@@ -14,6 +14,7 @@ import {
   searchArxiv,
 } from '../../api'
 import type { ArxivPaper } from '../../api'
+import { citationsForDemoId } from './data'
 import { DiscoverFeedReel } from './DiscoverFeedReel'
 import type { FeedItem, ReelItem } from './types'
 
@@ -54,7 +55,7 @@ function arxivPaperToFeedItem(paper: ArxivPaper): FeedItem {
     aiSummary: paper.summary || '',
     stats: { saves: 0, thread: 0 },
     tags,
-    citations: 0,
+    citations: citationsForDemoId(paper.id),
     likes: 0,
     comments: 0,
     arxivId,

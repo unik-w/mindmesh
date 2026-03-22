@@ -1,3 +1,6 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/bey-api/:path*", "destination": "/api/bey-proxy/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }

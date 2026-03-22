@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js'
 import {
   authorSearchPreview,
+  citationsForDemoId,
   demoProfile,
   demoSponsoredResearches,
   INTERESTS,
@@ -16,6 +17,11 @@ import {
   ROUTES,
   setApiBearerToken,
 } from './httpClient'
+import {
+  loadWorkspaceSessions,
+  prependWorkspaceSession,
+  updateWorkspaceSession,
+} from './localWorkspaceSessions'
 import { mockStore } from './mockStore'
 import type {
   AuthorSearchHit,
@@ -26,6 +32,7 @@ import type {
   LikeResult,
   PaperSearchHit,
   PdfUploadResult,
+  SessionFeedMoreState,
   SessionSummary,
   SponsorResearch,
   UserProfile,
@@ -163,7 +170,7 @@ function backendPaperToFeedItem(p: BackendPaper): FeedItem {
     aiSummary: summary + simNote,
     stats: { saves: 0, thread: 0 },
     tags,
-    citations: 0,
+    citations: citationsForDemoId(p.id),
     likes: 0,
     comments: 0,
     arxivId: extractArxivId(p),
@@ -424,6 +431,8 @@ export async function getPersistedComments(): Promise<
 }
 
 const FEED_PAGE_SIZE = 6
+const SESSION_FEED_BULK = 24
+const SESSION_PAGE_SIZE = 6
 
 export type FeedSummaryItem = {
   paper_id: string
@@ -631,11 +640,27 @@ export async function createSession(
     return mockStore.createSession(input)
   }
   let papers: FeedItem[] = []
+  let moreFeed: SessionFeedMoreState | undefined
   if (input.source === 'paper') {
     const q = input.paperQuery?.trim() ?? ''
+    const seed = input.seedPaperId?.trim()
     if (q) {
-      const hits = await searchPapers(q)
-      papers = hits.slice(0, 6).map(paperSearchHitToFeedItem)
+      const raw = await fetchPaperSearchBackend(q, 0, SESSION_FEED_BULK)
+      cachePapers(raw)
+      const ordered = orderBackendPapersForSeed(raw, seed)
+      const feedFull = ordered.map(backendPaperToFeedItem)
+      papers = feedFull.slice(0, SESSION_PAGE_SIZE)
+      const prefetchQueue = feedFull.slice(SESSION_PAGE_SIZE)
+      const apiExhausted = raw.length < SESSION_FEED_BULK
+      if (prefetchQueue.length > 0 || !apiExhausted) {
+        moreFeed = {
+          q,
+          nextApiOffset: raw.length,
+          pageSize: SESSION_PAGE_SIZE,
+          prefetchQueue,
+          apiExhausted,
+        }
+      }
     }
   }
   const derivedName =
@@ -822,6 +847,19 @@ export async function getSponsoredResearches(): Promise<SponsorResearch[]> {
     return mockStore.getSponsoredResearches()
   }
   return demoSponsoredResearches.map((r) => ({ ...r }))
+}
+
+async function fetchPaperSearchBackend(
+  query: string,
+  offset = 0,
+  limit = 24,
+): Promise<BackendPaper[]> {
+  const q = encodeURIComponent(query.trim())
+  const papers = await apiFetchJson<BackendPaper[]>(
+    `${ROUTES.paperSearch}?q=${q}&limit=${limit}&offset=${offset}`,
+    { method: 'GET' },
+  )
+  return Array.isArray(papers) ? papers : []
 }
 
 export async function searchPapers(query: string): Promise<PaperSearchHit[]> {

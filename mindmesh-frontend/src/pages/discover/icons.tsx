@@ -95,9 +95,9 @@ export function MindMeshWordmark() {
         className="h-7 w-auto sm:h-8"
         aria-hidden
       />
-      <span className="font-display text-[1.05rem] font-bold tracking-tight text-slate-900">
+      {/* <span className="font-display text-[1.05rem] font-bold tracking-tight text-slate-900">
         MindMesh
-      </span>
+      </span> */}
     </Link>
   )
 }
