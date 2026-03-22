@@ -1,12 +1,15 @@
-import type {
-  Dispatch,
-  MouseEvent as ReactMouseEvent,
-  SetStateAction,
+import {
+  useEffect,
+  useRef,
+  type Dispatch,
+  type MouseEvent as ReactMouseEvent,
+  type SetStateAction,
 } from 'react'
 import { btnPrimary, gradientText } from '../../uiClasses'
 import { formatCount } from './format'
 import type { FeedItem, ReelItem } from './types'
 import { HeartIcon, UserCircleIcon } from './icons'
+import { SummarySpeechButton } from './SummarySpeechButton'
 
 export type DiscoverFeedReelProps = {
   feedWithPromos: ReelItem[]
@@ -25,6 +28,9 @@ export type DiscoverFeedReelProps = {
     e: ReactMouseEvent<HTMLDivElement>,
     post: FeedItem,
   ) => void
+  onLoadMore?: () => void
+  loadingMore?: boolean
+  hasMore?: boolean
 }
 
 export function DiscoverFeedReel({
@@ -41,7 +47,45 @@ export function DiscoverFeedReel({
   commentExtras,
   submitComment,
   handleCardMainClick,
+  onLoadMore,
+  loadingMore,
+  hasMore,
 }: DiscoverFeedReelProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const prefetchTriggered = useRef(false)
+
+  useEffect(() => {
+    prefetchTriggered.current = false
+  }, [feedWithPromos.length])
+
+  const PREFETCH_OFFSET = 3
+
+  useEffect(() => {
+    const el = scrollContainerRef.current
+    if (!el || !onLoadMore || !hasMore || loadingMore) return
+
+    let ticking = false
+    const onScroll = () => {
+      if (ticking || prefetchTriggered.current) return
+      ticking = true
+      requestAnimationFrame(() => {
+        ticking = false
+        if (prefetchTriggered.current) return
+        const itemH = el.clientHeight
+        if (itemH <= 0) return
+        const currentIdx = Math.round(el.scrollTop / itemH)
+        if (currentIdx >= feedWithPromos.length - PREFETCH_OFFSET) {
+          prefetchTriggered.current = true
+          onLoadMore()
+        }
+      })
+    }
+
+    el.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [onLoadMore, hasMore, loadingMore, feedWithPromos.length])
+
   return (
     <section
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
@@ -49,6 +93,7 @@ export function DiscoverFeedReel({
     >
       <h1 className="sr-only">Research feed</h1>
       <div
+        ref={scrollContainerRef}
         className="min-h-0 flex-1 basis-0 snap-y snap-mandatory overflow-y-auto overscroll-y-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:thin] touch-pan-y"
         tabIndex={0}
         role="region"
@@ -260,11 +305,17 @@ export function DiscoverFeedReel({
                     className="relative mx-4 mb-3 mt-0 max-h-[min(440px,58svh)] overflow-y-auto rounded-xl border border-slate-200/85 bg-linear-to-b from-slate-50/98 to-white px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] ring-1 ring-slate-100/70 [scrollbar-width:thin]"
                     aria-label="AI-generated summary"
                   >
-                    <p
-                      className={`m-0 text-[0.68rem] font-semibold tracking-[0.14em] uppercase ${gradientText}`}
-                    >
-                      AI summary
-                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p
+                        className={`m-0 min-w-0 flex-1 text-[0.68rem] font-semibold tracking-[0.14em] uppercase ${gradientText}`}
+                      >
+                        AI summary
+                      </p>
+                      <SummarySpeechButton
+                        text={post.aiSummary}
+                        className="-mr-1 -mt-0.5"
+                      />
+                    </div>
                     <div className="mt-2.5 space-y-2.5 text-[0.9rem] leading-[1.58] text-slate-700">
                       {post.aiSummary
                         .split('\n\n')
@@ -434,6 +485,29 @@ export function DiscoverFeedReel({
           </article>
         )
         })}
+        {loadingMore ? (
+          <div
+            className="flex min-h-[120px] snap-start items-center justify-center py-6"
+            aria-hidden="true"
+          >
+            <div className="flex flex-col items-center gap-2">
+              <span
+                className="size-8 rounded-full border-2 border-slate-200 border-t-violet-600 animate-spin"
+                aria-hidden="true"
+              />
+              <span className="text-xs font-medium text-slate-500">
+                Loading more papers…
+              </span>
+            </div>
+          </div>
+        ) : null}
+        {!hasMore && feedWithPromos.length > 0 ? (
+          <div className="flex min-h-[80px] snap-start items-center justify-center py-6">
+            <span className="text-xs font-medium text-slate-400">
+              You've reached the end of your feed
+            </span>
+          </div>
+        ) : null}
       </div>
     </section>
   )

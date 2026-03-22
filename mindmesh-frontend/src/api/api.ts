@@ -40,6 +40,21 @@ const interestIdByLabel = new Map<string, string>(
   INTERESTS.map((i) => [i.label.trim().toLowerCase(), i.id]),
 )
 
+const legacyLabelToIds: Record<string, string[]> = {
+  'machine learning & ai': ['ml', 'ai'],
+  'biology & genomics': ['biology', 'genomics'],
+  'climate & sustainability': ['climate', 'sustainability'],
+  'physics & applied math': ['physics', 'applied-math'],
+  'medicine & health': ['medicine', 'health'],
+  'hci, design & computing': ['hci', 'design', 'computing'],
+  'neuroscience & cognition': ['neuro', 'cognition'],
+  'chemistry & materials': ['chemistry', 'materials'],
+  'robotics & systems': ['robotics', 'systems'],
+  'economics & policy': ['economics', 'policy'],
+  'social & behavioral science': ['social-science', 'behavioral-science'],
+  'energy & infrastructure': ['energy', 'infrastructure'],
+}
+
 function delay(ms = 180) {
   return new Promise((r) => setTimeout(r, ms))
 }
@@ -194,8 +209,14 @@ function interestIdsToApiLabels(ids: string[]): string[] {
 function apiLabelsToInterestIds(labels: string[]): string[] {
   const out: string[] = []
   for (const l of labels) {
-    const id = interestIdByLabel.get(l.trim().toLowerCase())
-    if (id) out.push(id)
+    const key = l.trim().toLowerCase()
+    const id = interestIdByLabel.get(key)
+    if (id) {
+      out.push(id)
+    } else {
+      const legacy = legacyLabelToIds[key]
+      if (legacy) out.push(...legacy)
+    }
   }
   return out
 }
@@ -352,6 +373,30 @@ export async function getUserLikes(): Promise<Record<string, boolean>> {
   return map
 }
 
+export type LikedPaper = {
+  id: string
+  title: string
+  authorLine: string
+}
+
+export async function getUserLikedPapers(): Promise<LikedPaper[]> {
+  if (isMockApiMode()) {
+    await delay(20)
+    return []
+  }
+  const papers = await apiFetchJson<BackendPaper[]>(ROUTES.userLikes, {
+    method: 'GET',
+  })
+  if (!Array.isArray(papers)) return []
+  return papers
+    .filter((p): p is BackendPaper & { id: string } => !!p?.id)
+    .map((p) => ({
+      id: p.id,
+      title: p.title || 'Untitled',
+      authorLine: p.authors?.join(', ') ?? 'Unknown authors',
+    }))
+}
+
 export async function getPersistedComments(): Promise<
   Record<string, CardComment[]>
 > {
@@ -362,20 +407,90 @@ export async function getPersistedComments(): Promise<
   return {}
 }
 
+const FEED_PAGE_SIZE = 6
+
+export type FeedSummaryItem = {
+  paper_id: string
+  title: string
+  summary: string
+  error?: string | null
+}
+
+export async function fetchFeedSummaries(
+  papers: { id: string; title: string; summary?: string | null; authors?: string[] | null; categories?: string[] | null; links?: Record<string, string> | null; published?: string | null; similarity?: number | null }[],
+): Promise<FeedSummaryItem[]> {
+  try {
+    const res = await apiFetchJson<{
+      total: number
+      summaries: FeedSummaryItem[]
+    }>(ROUTES.llmFeedSummary, {
+      method: 'POST',
+      json: {
+        papers: papers.map((p) => ({
+          id: p.id,
+          title: p.title,
+          summary: p.summary ?? null,
+          authors: p.authors ?? [],
+          categories: p.categories ?? [],
+          links: p.links ?? null,
+          published: p.published ?? null,
+          similarity: p.similarity ?? null,
+        })),
+      },
+    })
+    return res.summaries ?? []
+  } catch {
+    return []
+  }
+}
+
+const rawPaperCache = new Map<string, BackendPaper>()
+
+function cachePapers(papers: BackendPaper[]) {
+  for (const p of papers) rawPaperCache.set(p.id, p)
+}
+
+
 export async function getDiscoveryFeed(
   _interestIds: string[],
+  onSummaries?: (summaries: FeedSummaryItem[]) => void,
 ): Promise<FeedItem[]> {
   if (isMockApiMode()) {
     await delay()
     return mockStore.getDiscoveryFeed(_interestIds)
   }
-  const limit = 50
   const papers = await apiFetchJson<BackendPaper[]>(
-    `${ROUTES.userFeed}?limit=${limit}&offset=0`,
+    `${ROUTES.userFeed}?limit=${FEED_PAGE_SIZE}&offset=0`,
     { method: 'GET' },
   )
-  if (!Array.isArray(papers)) return []
-  return papers.map(backendPaperToFeedItem)
+  if (!Array.isArray(papers) || papers.length === 0) return []
+  cachePapers(papers)
+  const items = papers.map(backendPaperToFeedItem)
+  void fetchFeedSummaries(papers).then((summaries) => {
+    if (summaries.length > 0) onSummaries?.(summaries)
+  })
+  return items
+}
+
+export async function loadMoreFeedPapers(
+  offset: number,
+  onSummaries?: (summaries: FeedSummaryItem[]) => void,
+): Promise<FeedItem[]> {
+  if (isMockApiMode()) {
+    await delay()
+    return []
+  }
+  const papers = await apiFetchJson<BackendPaper[]>(
+    `${ROUTES.userFeed}?limit=${FEED_PAGE_SIZE}&offset=${offset}`,
+    { method: 'GET' },
+  )
+  if (!Array.isArray(papers) || papers.length === 0) return []
+  cachePapers(papers)
+  const items = papers.map(backendPaperToFeedItem)
+  void fetchFeedSummaries(papers).then((summaries) => {
+    if (summaries.length > 0) onSummaries?.(summaries)
+  })
+  return items
 }
 
 export async function listSessions(): Promise<SessionSummary[]> {
@@ -443,9 +558,22 @@ export async function setCardLike(
     return mockStore.setCardLike(cardId, liked)
   }
   if (liked) {
+    const cached = rawPaperCache.get(cardId)
     await apiFetchJson(ROUTES.userLike, {
       method: 'POST',
-      json: { paper_id: cardId },
+      json: {
+        paper_id: cardId,
+        ...(cached
+          ? {
+              title: cached.title,
+              summary: cached.summary ?? null,
+              authors: cached.authors ?? [],
+              categories: cached.categories ?? [],
+              links: cached.links ?? {},
+              published: cached.published ?? null,
+            }
+          : {}),
+      },
     })
   } else {
     await apiFetchJson(ROUTES.userDislike, {
@@ -554,6 +682,70 @@ export async function searchAuthors(query: string): Promise<AuthorSearchHit[]> {
       a.name.toLowerCase().includes(q) ||
       a.affiliation.toLowerCase().includes(q),
   )
+}
+
+export type ArxivPaper = {
+  id: string
+  title: string
+  summary: string
+  authors: string[]
+  published: string
+  categories: string[]
+  links: Record<string, string>
+}
+
+export type ArxivSearchResult = {
+  total_results: number
+  start_index: number
+  items_per_page: number
+  papers: ArxivPaper[]
+}
+
+export async function searchArxiv(
+  query: string,
+  start = 0,
+  maxResults = 6,
+): Promise<ArxivSearchResult> {
+  if (isMockApiMode()) {
+    await delay(120)
+    return { total_results: 0, start_index: 0, items_per_page: 0, papers: [] }
+  }
+  const q = encodeURIComponent(query.trim())
+  return apiFetchJson<ArxivSearchResult>(
+    `${ROUTES.arxivSearch}?q=${q}&start=${start}&max_results=${maxResults}`,
+    { method: 'GET' },
+  )
+}
+
+export type ArxivMoreResult = {
+  source: 'db' | 'arxiv'
+  papers: ArxivPaper[]
+  total_results?: number
+  arxiv_start: number
+  db_offset: number
+}
+
+export async function loadMoreArxivResults(opts: {
+  q: string
+  arxivStart: number
+  dbOffset: number
+  pageSize?: number
+  seedPapers?: { title: string; summary: string }[]
+}): Promise<ArxivMoreResult> {
+  if (isMockApiMode()) {
+    await delay(200)
+    return { source: 'arxiv', papers: [], arxiv_start: opts.arxivStart, db_offset: opts.dbOffset }
+  }
+  return apiFetchJson<ArxivMoreResult>(ROUTES.arxivMore, {
+    method: 'POST',
+    json: {
+      q: opts.q,
+      arxiv_start: opts.arxivStart,
+      db_offset: opts.dbOffset,
+      page_size: opts.pageSize ?? 6,
+      seed_papers: opts.seedPapers ?? [],
+    },
+  })
 }
 
 export async function uploadPdf(file: File): Promise<PdfUploadResult> {

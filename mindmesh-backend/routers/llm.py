@@ -20,7 +20,7 @@ FEATHERLESS_BASE_URL = os.getenv("FEATHERLESS_BASE_URL", "https://api.featherles
 FEATHERLESS_MODEL = os.getenv(
     "FEATHERLESS_MODEL", "meta-llama/Meta-Llama-3.1-8B-Instruct"
 )
-MAX_LLM_CONCURRENCY = 10
+MAX_LLM_CONCURRENCY = 3
 PDF_MAX_CHARS = 15_000
 
 
@@ -55,7 +55,7 @@ class FeedPaper(BaseModel):
 
 
 class FeedSummaryRequest(BaseModel):
-    papers: list[FeedPaper] = Field(..., min_length=1, max_length=50)
+    papers: list[FeedPaper] = Field(..., min_length=1, max_length=6)
 
 
 class PaperSummaryItem(BaseModel):

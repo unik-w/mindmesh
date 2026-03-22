@@ -19,6 +19,7 @@ import {
   getUserLikes,
   joinSession,
   listSessions,
+  loadMoreFeedPapers,
   saveInterests,
   searchPapers,
   setCardLike,
@@ -38,8 +39,12 @@ import {
   arxivPdfUrl,
   paperDetailText,
 } from './discover/arxiv'
+import { ArxivSearchPanel } from './discover/ArxivSearchPanel'
 import { DiscoverAuthorsPanel } from './discover/DiscoverAuthorsPanel'
 import { DiscoverFeedReel } from './discover/DiscoverFeedReel'
+import { stopElevenLabsPlayback } from './discover/elevenlabsTts'
+import { SummarySpeechButton } from './discover/SummarySpeechButton'
+import { LikesPanel } from './discover/LikesPanel'
 import { demoProfile, feedItems, INTERESTS } from './discover/data'
 import {
   sessionRowActive,
@@ -50,6 +55,7 @@ import {
 } from './discover/discoverNavStyles'
 import { interleaveFeedPromos } from './discover/feedPromos'
 import { relatedPapersFor } from './discover/relatedPapers'
+import type { FeedSummaryItem } from '../api'
 import type { PaperSearchHit, SessionSummary } from '../api/types'
 import type { FeedItem, MainPanel, NewSessionModalStep } from './discover/types'
 import {
@@ -58,6 +64,7 @@ import {
   IconPlus,
   MindMeshWordmark,
   SidebarNavIconDiscover,
+  SidebarNavIconLikes,
   SidebarNavIconSearch,
 } from './discover/icons'
 
@@ -76,8 +83,12 @@ export default function DiscoverPage() {
   const [paperQuery, setPaperQuery] = useState('')
   const accountMenuRef = useRef<HTMLDivElement>(null)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const [likedPosts, setLikedPosts] = useState<Record<string, boolean>>({})
+  const likedPostsRef = useRef(likedPosts)
+  likedPostsRef.current = likedPosts
+  const likeInFlightRef = useRef<Set<string>>(new Set())
   const [commentsOpenPostId, setCommentsOpenPostId] = useState<string | null>(
     null,
   )
@@ -98,6 +109,10 @@ export default function DiscoverPage() {
   const [paperHits, setPaperHits] = useState<PaperSearchHit[]>([])
   const [paperSearchLoading, setPaperSearchLoading] = useState(false)
 
+  const [feedOffset, setFeedOffset] = useState(0)
+  const [feedHasMore, setFeedHasMore] = useState(true)
+  const [feedLoadingMore, setFeedLoadingMore] = useState(false)
+
   const selectedInterestKey = useMemo(
     () => [...selected].sort().join(','),
     [selected],
@@ -109,30 +124,51 @@ export default function DiscoverPage() {
     demoProfile.username
 
   const togglePostLike = useCallback((postId: string) => {
-    setLikedPosts((prev) => {
-      const prevLiked = Boolean(prev[postId])
-      const nextLiked = !prevLiked
-      const delta = nextLiked ? 1 : -1
-      setDiscoveryFeedItems((items) =>
-        items.map((p) =>
-          p.id === postId ? { ...p, likes: Math.max(0, p.likes + delta) } : p,
+    if (likeInFlightRef.current.has(postId)) return
+
+    const prevLiked = Boolean(likedPostsRef.current[postId])
+    const nextLiked = !prevLiked
+    const delta = nextLiked ? 1 : -1
+
+    likedPostsRef.current = { ...likedPostsRef.current, [postId]: nextLiked }
+    likeInFlightRef.current.add(postId)
+
+    setLikedPosts((prev) => ({ ...prev, [postId]: nextLiked }))
+    setDiscoveryFeedItems((items) =>
+      items.map((p) =>
+        p.id === postId ? { ...p, likes: Math.max(0, p.likes + delta) } : p,
+      ),
+    )
+    setWorkspaceSessions((sessions) =>
+      sessions.map((s) => ({
+        ...s,
+        papers: s.papers.map((p) =>
+          p.id === postId
+            ? { ...p, likes: Math.max(0, p.likes + delta) }
+            : p,
         ),
-      )
-      setWorkspaceSessions((sessions) =>
-        sessions.map((s) => ({
-          ...s,
-          papers: s.papers.map((p) =>
+      })),
+    )
+
+    void setCardLike(postId, nextLiked)
+      .then((res) => {
+        likedPostsRef.current = { ...likedPostsRef.current, [postId]: res.liked }
+        setLikedPosts((p) => ({ ...p, [postId]: res.liked }))
+        setDiscoveryFeedItems((items) =>
+          items.map((p) =>
             p.id === postId
-              ? { ...p, likes: Math.max(0, p.likes + delta) }
+              ? {
+                  ...p,
+                  likes:
+                    res.likes !== undefined ? res.likes : p.likes,
+                }
               : p,
           ),
-        })),
-      )
-      void setCardLike(postId, nextLiked)
-        .then((res) => {
-          setLikedPosts((p) => ({ ...p, [postId]: res.liked }))
-          setDiscoveryFeedItems((items) =>
-            items.map((p) =>
+        )
+        setWorkspaceSessions((sessions) =>
+          sessions.map((s) => ({
+            ...s,
+            papers: s.papers.map((p) =>
               p.id === postId
                 ? {
                     ...p,
@@ -141,42 +177,31 @@ export default function DiscoverPage() {
                   }
                 : p,
             ),
-          )
-          setWorkspaceSessions((sessions) =>
-            sessions.map((s) => ({
-              ...s,
-              papers: s.papers.map((p) =>
-                p.id === postId
-                  ? {
-                      ...p,
-                      likes:
-                        res.likes !== undefined ? res.likes : p.likes,
-                    }
-                  : p,
-              ),
-            })),
-          )
-        })
-        .catch(() => {
-          setLikedPosts((p) => ({ ...p, [postId]: prevLiked }))
-          setDiscoveryFeedItems((items) =>
-            items.map((p) =>
-              p.id === postId ? { ...p, likes: Math.max(0, p.likes - delta) } : p,
+          })),
+        )
+      })
+      .catch(() => {
+        likedPostsRef.current = { ...likedPostsRef.current, [postId]: prevLiked }
+        setLikedPosts((p) => ({ ...p, [postId]: prevLiked }))
+        setDiscoveryFeedItems((items) =>
+          items.map((p) =>
+            p.id === postId ? { ...p, likes: Math.max(0, p.likes - delta) } : p,
+          ),
+        )
+        setWorkspaceSessions((sessions) =>
+          sessions.map((s) => ({
+            ...s,
+            papers: s.papers.map((p) =>
+              p.id === postId
+                ? { ...p, likes: Math.max(0, p.likes - delta) }
+                : p,
             ),
-          )
-          setWorkspaceSessions((sessions) =>
-            sessions.map((s) => ({
-              ...s,
-              papers: s.papers.map((p) =>
-                p.id === postId
-                  ? { ...p, likes: Math.max(0, p.likes - delta) }
-                  : p,
-              ),
-            })),
-          )
-        })
-      return { ...prev, [postId]: nextLiked }
-    })
+          })),
+        )
+      })
+      .finally(() => {
+        likeInFlightRef.current.delete(postId)
+      })
   }, [])
 
   const displayedLikeCount = useCallback((post: FeedItem) => post.likes, [])
@@ -217,7 +242,10 @@ export default function DiscoverPage() {
     [commentAuthorName],
   )
 
-  const closePaperSheet = useCallback(() => setPaperSheetPost(null), [])
+  const closePaperSheet = useCallback(() => {
+    stopElevenLabsPlayback()
+    setPaperSheetPost(null)
+  }, [])
 
   const handleCardMainClick = useCallback(
     (e: ReactMouseEvent<HTMLDivElement>, post: FeedItem) => {
@@ -237,6 +265,21 @@ export default function DiscoverPage() {
     })
   }, [])
 
+  const applySummaries = useCallback((summaries: FeedSummaryItem[]) => {
+    const map = new Map(
+      summaries
+        .filter((s) => s.summary && !s.error)
+        .map((s) => [s.paper_id, s.summary]),
+    )
+    if (map.size === 0) return
+    setDiscoveryFeedItems((prev) =>
+      prev.map((item) => {
+        const llm = map.get(item.id)
+        return llm ? { ...item, aiSummary: llm } : item
+      }),
+    )
+  }, [])
+
   const handleContinue = useCallback(async () => {
     if (selected.size === 0) return
     try {
@@ -246,6 +289,26 @@ export default function DiscoverPage() {
       /* ignore */
     }
   }, [selected])
+
+  const handleLoadMore = useCallback(async () => {
+    if (feedLoadingMore || !feedHasMore) return
+    setFeedLoadingMore(true)
+    try {
+      const nextOffset = feedOffset + 6
+      const more = await loadMoreFeedPapers(nextOffset, applySummaries)
+      if (more.length === 0) {
+        setFeedHasMore(false)
+      } else {
+        setDiscoveryFeedItems((prev) => [...prev, ...more])
+        setFeedOffset(nextOffset)
+        if (more.length < 6) setFeedHasMore(false)
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setFeedLoadingMore(false)
+    }
+  }, [feedOffset, feedLoadingMore, feedHasMore, applySummaries])
 
   useEffect(() => {
     if (!supabase) {
@@ -282,6 +345,9 @@ export default function DiscoverPage() {
     setActiveSessionId(null)
     setWorkspaceSessions([])
     setDiscoveryFeedItems([])
+    setFeedOffset(0)
+    setFeedHasMore(true)
+    setFeedLoadingMore(false)
     setLikedPosts({})
     setCommentExtras({})
   }, [authReady, authUser])
@@ -311,13 +377,17 @@ export default function DiscoverPage() {
       setSessionsLoading(true)
       try {
         const [feed, list, likesMap, commentsMap] = await Promise.all([
-          getDiscoveryFeed([...selected]),
+          getDiscoveryFeed([...selected], (s) => {
+            if (!cancelled) applySummaries(s)
+          }),
           listSessions(),
           getUserLikes(),
           getPersistedComments(),
         ])
         if (cancelled) return
         setDiscoveryFeedItems(feed)
+        setFeedOffset(0)
+        setFeedHasMore(feed.length >= 6)
         setWorkspaceSessions(list)
         setLikedPosts(likesMap)
         setCommentExtras(commentsMap)
@@ -550,7 +620,7 @@ export default function DiscoverPage() {
           aria-modal="true"
           aria-labelledby="interest-dialog-title"
           aria-describedby="interest-dialog-desc"
-          className="relative flex max-h-[min(90vh,720px)] w-full max-w-lg flex-col overflow-hidden rounded-2xl border border-white/40 bg-white shadow-[0_24px_80px_-12px_rgba(15,23,42,0.28),0_0_0_1px_rgba(255,255,255,0.6)_inset] ring-1 ring-slate-200/50"
+          className="relative flex max-h-[min(90vh,720px)] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-white/40 bg-white shadow-[0_24px_80px_-12px_rgba(15,23,42,0.28),0_0_0_1px_rgba(255,255,255,0.6)_inset] ring-1 ring-slate-200/50 sm:max-w-2xl"
         >
           <div className="shrink-0 border-b border-slate-100/90 bg-white px-5 pt-5 pb-4">
             <p
@@ -579,7 +649,7 @@ export default function DiscoverPage() {
 
           <div className="min-h-0 flex-1 overflow-y-auto bg-white px-5 py-4">
             <div
-              className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+              className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4"
               role="group"
               aria-label="Research interests"
               aria-describedby="interest-hint"
@@ -592,7 +662,7 @@ export default function DiscoverPage() {
                     type="button"
                     aria-pressed={isOn}
                     onClick={() => toggle(item.id)}
-                    className={`rounded-xl border px-3.5 py-3 text-left text-[0.875rem] font-medium transition-all duration-150 ${
+                    className={`rounded-xl border px-2.5 py-2.5 text-left text-[0.8125rem] font-medium transition-all duration-150 sm:px-3.5 sm:py-3 sm:text-[0.875rem] ${
                       isOn
                         ? 'border-transparent bg-linear-to-r from-cyan-500/15 via-blue-500/12 to-violet-500/15 text-heading shadow-md shadow-violet-500/10 ring-2 ring-violet-500/40'
                         : 'border-border/90 bg-white text-foreground hover:border-violet-200 hover:bg-slate-50/70'
@@ -699,12 +769,18 @@ export default function DiscoverPage() {
 
           <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain bg-white px-4 py-4 sm:px-6 [scrollbar-width:thin]">
             <section aria-labelledby="paper-detail-heading">
-              <h3
-                id="paper-detail-heading"
-                className="m-0 text-[0.8125rem] font-semibold tracking-wide text-slate-800"
-              >
-                Detailed explanation
-              </h3>
+              <div className="flex items-start justify-between gap-2">
+                <h3
+                  id="paper-detail-heading"
+                  className="m-0 min-w-0 flex-1 text-[0.8125rem] font-semibold tracking-wide text-slate-800"
+                >
+                  Detailed explanation
+                </h3>
+                <SummarySpeechButton
+                  text={paperDetailText(paperSheetPost)}
+                  className="-mr-1 -mt-0.5 text-slate-600"
+                />
+              </div>
               <div className="mt-2 space-y-2.5 text-[0.9rem] leading-relaxed text-slate-700">
                 {paperDetailText(paperSheetPost)
                   .split('\n\n')
@@ -1100,12 +1176,30 @@ export default function DiscoverPage() {
           </div>
         ) : showDiscoverApp ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:flex-row">
+            {sidebarOpen && (
+              <div
+                className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm transition-opacity lg:hidden"
+                onClick={() => setSidebarOpen(false)}
+                aria-hidden
+              />
+            )}
             <aside
-              className="flex max-h-[42vh] w-full min-h-0 shrink-0 flex-col overflow-y-auto border-slate-200 bg-[#ececf0] lg:max-h-none lg:h-full lg:min-h-0 lg:w-[260px] lg:shrink-0 lg:border-r"
+              className={`fixed inset-y-0 left-0 z-40 flex h-full w-[280px] flex-col overflow-y-auto border-slate-200 bg-[#ececf0] shadow-xl transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:static lg:z-auto lg:h-full lg:w-[260px] lg:shrink-0 lg:translate-x-0 lg:shadow-none lg:border-r`}
               aria-label="Workspace"
             >
-              <div className="shrink-0 px-3 pt-3 pb-2">
+              <div className="flex shrink-0 items-center justify-between px-3 pt-3 pb-2">
                 <MindMeshWordmark />
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen(false)}
+                  className="flex size-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-200/70 lg:hidden"
+                  aria-label="Close sidebar"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <line x1="18" x2="6" y1="6" y2="18" />
+                    <line x1="6" x2="18" y1="6" y2="18" />
+                  </svg>
+                </button>
               </div>
               <div className="flex flex-col gap-1 p-2 pt-0">
                 <button
@@ -1115,6 +1209,7 @@ export default function DiscoverPage() {
                     setMainPanel((p) =>
                       p === 'discover' ? 'feed' : 'discover',
                     )
+                    setSidebarOpen(false)
                   }}
                   className={`${sidebarNavBtn} ${mainPanel === 'discover' ? sidebarNavBtnActive : sidebarNavBtnIdle}`}
                 >
@@ -1127,14 +1222,29 @@ export default function DiscoverPage() {
                   type="button"
                   onClick={() => {
                     setActiveSessionId(null)
-                    setMainPanel((p) => (p === 'authors' ? 'discover' : 'authors'))
+                    setMainPanel((p) => (p === 'arxiv' ? 'discover' : 'arxiv'))
+                    setSidebarOpen(false)
                   }}
-                  className={`${sidebarNavBtn} ${mainPanel === 'authors' ? sidebarNavBtnActive : sidebarNavBtnIdle}`}
+                  className={`${sidebarNavBtn} ${mainPanel === 'arxiv' ? sidebarNavBtnActive : sidebarNavBtnIdle}`}
                 >
                   <SidebarNavIconSearch
-                    className={`shrink-0 ${mainPanel === 'authors' ? 'text-violet-700' : 'text-slate-600 opacity-80'}`}
+                    className={`shrink-0 ${mainPanel === 'arxiv' ? 'text-violet-700' : 'text-slate-600 opacity-80'}`}
                   />
-                  Search author
+                  Search arXiv
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveSessionId(null)
+                    setMainPanel((p) => (p === 'likes' ? 'discover' : 'likes'))
+                    setSidebarOpen(false)
+                  }}
+                  className={`${sidebarNavBtn} ${mainPanel === 'likes' ? sidebarNavBtnActive : sidebarNavBtnIdle}`}
+                >
+                  <SidebarNavIconLikes
+                    className={`shrink-0 ${mainPanel === 'likes' ? 'text-violet-700' : 'text-slate-600 opacity-80'}`}
+                  />
+                  My Likes
                 </button>
               </div>
 
@@ -1151,6 +1261,7 @@ export default function DiscoverPage() {
                     setNewSessionStep('choose')
                     setPaperQuery('')
                     setPaperHits([])
+                    setSidebarOpen(false)
                   }}
                   className={`${sidebarNavBtn} ${sidebarNavBtnIdle} mb-1.5 font-medium text-slate-800`}
                 >
@@ -1174,6 +1285,7 @@ export default function DiscoverPage() {
                             void joinSession(s.id)
                             setMainPanel('feed')
                             setActiveSessionId(s.id)
+                            setSidebarOpen(false)
                           }}
                           className={`${sessionRowBtn} ${isActive ? sessionRowActive : ''}`}
                           title={s.meta}
@@ -1260,6 +1372,18 @@ export default function DiscoverPage() {
             </aside>
 
             <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-100/95">
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen(true)}
+                  className="absolute left-3 top-3 z-20 flex size-10 items-center justify-center rounded-xl border border-slate-200/80 bg-white/90 shadow-sm backdrop-blur-sm transition-colors hover:bg-white lg:hidden"
+                  aria-label="Open sidebar"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                    <line x1="3" x2="21" y1="6" y2="6" />
+                    <line x1="3" x2="21" y1="12" y2="12" />
+                    <line x1="3" x2="21" y1="18" y2="18" />
+                  </svg>
+                </button>
                 <div
                   className="pointer-events-none absolute inset-0 opacity-100"
                   aria-hidden
@@ -1296,11 +1420,36 @@ export default function DiscoverPage() {
                         commentExtras={commentExtras}
                         submitComment={submitComment}
                         handleCardMainClick={handleCardMainClick}
+                        onLoadMore={handleLoadMore}
+                        loadingMore={feedLoadingMore}
+                        hasMore={feedHasMore}
                       />
                     </div>
                   ) : null}
 
                   {mainPanel === 'authors' ? <DiscoverAuthorsPanel /> : null}
+                  {mainPanel === 'arxiv' ? (
+                    <ArxivSearchPanel
+                      selected={selected}
+                      likedPosts={likedPosts}
+                      togglePostLike={togglePostLike}
+                      displayedLikeCount={displayedLikeCount}
+                      displayedCommentCount={displayedCommentCount}
+                      commentsOpenPostId={commentsOpenPostId}
+                      toggleCommentsOpen={toggleCommentsOpen}
+                      commentDraftByPost={commentDraftByPost}
+                      setCommentDraftByPost={setCommentDraftByPost}
+                      commentExtras={commentExtras}
+                      submitComment={submitComment}
+                      handleCardMainClick={handleCardMainClick}
+                    />
+                  ) : null}
+                  {mainPanel === 'likes' ? (
+                    <LikesPanel
+                      likedPosts={likedPosts}
+                      togglePostLike={togglePostLike}
+                    />
+                  ) : null}
                 </div>
             </div>
           </div>

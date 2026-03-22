@@ -2,6 +2,7 @@ import os
 import uuid
 
 import jwt
+import requests as stdlib_requests
 from fastapi import APIRouter, Depends, HTTPException
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token
@@ -18,14 +19,36 @@ class GoogleLoginRequest(BaseModel):
     token: str
 
 
+def _resolve_google_identity(token: str) -> dict:
+    """Accept either a Google ID token (JWT) or an access token (opaque)."""
+    # Try ID token verification first
+    try:
+        return id_token.verify_oauth2_token(
+            token, google_requests.Request(), GOOGLE_CLIENT_ID
+        )
+    except Exception:
+        pass
+
+    # Fallback: treat as an access token and call Google userinfo
+    try:
+        resp = stdlib_requests.get(
+            "https://www.googleapis.com/oauth2/v3/userinfo",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get("sub"):
+                return data
+    except Exception:
+        pass
+
+    raise HTTPException(401, "Invalid Google token: not a valid ID token or access token")
+
+
 @router.post("/login")
 def login(body: GoogleLoginRequest):
-    try:
-        info = id_token.verify_oauth2_token(
-            body.token, google_requests.Request(), GOOGLE_CLIENT_ID
-        )
-    except Exception as e:
-        raise HTTPException(401, f"Invalid Google token: {e}")
+    info = _resolve_google_identity(body.token)
 
     result = deps.db.table("users").select("*").eq("google_id", info["sub"]).execute()
 

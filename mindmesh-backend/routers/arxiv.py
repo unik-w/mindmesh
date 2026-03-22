@@ -4,6 +4,7 @@ from xml.etree import ElementTree as ET
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from backend import deps
 
@@ -70,43 +71,138 @@ def _extract_arxiv_id(q: str) -> str | None:
     return None
 
 
+def query_arxiv(
+    search_query: str,
+    *,
+    start: int = 0,
+    max_results: int = 6,
+    sort_by: str = "submittedDate",
+    sort_order: str = "descending",
+) -> dict[str, Any]:
+    """Reusable arXiv API query. Raises on network/HTTP errors."""
+    resp = requests.get(
+        ARXIV_API,
+        params={
+            "search_query": search_query,
+            "start": start,
+            "max_results": max_results,
+            "sortBy": sort_by,
+            "sortOrder": sort_order,
+        },
+        headers={"User-Agent": "mindmesh/1"},
+        timeout=120,
+    )
+    resp.raise_for_status()
+    return _parse_feed(resp.text)
+
+
 @router.get("/search")
 def search_arxiv(
     q: str = Query(..., min_length=1, description="Search query, arXiv URL, or arXiv ID"),
     start: int = Query(0, ge=0, description="Pagination offset"),
-    max_results: int = Query(20, ge=1, le=100, description="Number of results"),
+    max_results: int = Query(6, ge=1, le=100, description="Number of results"),
     _user: dict = Depends(deps.get_current_user),
 ):
     arxiv_id = _extract_arxiv_id(q)
     if arxiv_id:
-        search_query = f"id:{arxiv_id}"
-        params = {"search_query": search_query, "start": 0, "max_results": 1}
-    else:
-        search_query = f"all:{q}"
-        params = {
-            "search_query": search_query,
-            "start": start,
-            "max_results": max_results,
-            "sortBy": "relevance",
-            "sortOrder": "descending",
-        }
+        return query_arxiv(f"id:{arxiv_id}", max_results=1)
 
     try:
-        resp = requests.get(
-            ARXIV_API,
-            params=params,
-            headers={"User-Agent": "mindmesh/1"},
-            timeout=120,
+        return query_arxiv(
+            f"all:{q}",
+            start=start,
+            max_results=max_results,
+            sort_by="relevance",
         )
-        resp.raise_for_status()
     except requests.Timeout:
         raise HTTPException(504, "arXiv API timed out — try again")
     except requests.RequestException as e:
         log.error("arXiv request failed: %s", e)
         raise HTTPException(502, f"arXiv API error: {e}")
 
-    if resp.status_code != 200:
-        log.error("arXiv returned %s: %s", resp.status_code, resp.text[:500])
-        raise HTTPException(502, f"arXiv returned status {resp.status_code}")
 
-    return _parse_feed(resp.text)
+class MoreRequest(BaseModel):
+    q: str
+    arxiv_start: int = 12
+    db_offset: int = 0
+    page_size: int = 6
+    seed_papers: list[dict] = []  # [{"title": ..., "summary": ...}]
+
+
+@router.post("/more")
+def arxiv_more(body: MoreRequest, _user: dict = Depends(deps.get_current_user)):
+    """Load more results for an arXiv search.
+
+    Tries semantic DB search (via seed-paper embeddings) first.
+    Falls back to paginated arXiv results when the best DB similarity
+    is below MIN_SIM = 0.75.
+    """
+    import numpy as np
+    from backend.routers.paper import _compute_embedding
+
+    MIN_SIM = 0.75
+
+    # --- 1. Try DB semantic search using seed paper embeddings ---
+    if body.seed_papers:
+        embeddings = []
+        for sp in body.seed_papers[:5]:
+            title = (sp.get("title") or "").strip()
+            summary = (sp.get("summary") or "").strip()
+            if title:
+                try:
+                    embeddings.append(_compute_embedding(title, summary))
+                except Exception as exc:
+                    log.warning("Embedding failed for seed paper: %s", exc)
+
+        if embeddings:
+            avg_emb = np.mean(embeddings, axis=0).tolist()
+            emb_str = "[" + ",".join(f"{x:.8f}" for x in avg_emb) + "]"
+
+            try:
+                db_result = deps.db.rpc(
+                    "search_papers",
+                    {
+                        "p_query": body.q,
+                        "p_embedding": emb_str,
+                        "p_limit": body.page_size,
+                        "p_offset": body.db_offset,
+                    },
+                ).execute()
+                db_papers = db_result.data or []
+
+                if db_papers:
+                    best_sim = max((r.get("similarity") or 0.0) for r in db_papers)
+                    log.info(
+                        "[arxiv/more] DB best_sim=%.4f threshold=%.2f", best_sim, MIN_SIM
+                    )
+                    if best_sim >= MIN_SIM:
+                        return {
+                            "source": "db",
+                            "papers": db_papers,
+                            "arxiv_start": body.arxiv_start,
+                            "db_offset": body.db_offset + body.page_size,
+                        }
+                    log.info("[arxiv/more] DB similarity below threshold, using arXiv")
+            except Exception as exc:
+                log.error("[arxiv/more] DB search failed: %s", exc)
+
+    # --- 2. Fallback: more arXiv results ---
+    try:
+        result = query_arxiv(
+            f"all:{body.q}",
+            start=body.arxiv_start,
+            max_results=body.page_size,
+            sort_by="relevance",
+        )
+        return {
+            "source": "arxiv",
+            "papers": result.get("papers", []),
+            "total_results": result.get("total_results", 0),
+            "arxiv_start": body.arxiv_start + body.page_size,
+            "db_offset": body.db_offset,
+        }
+    except requests.Timeout:
+        raise HTTPException(504, "arXiv API timed out — try again")
+    except requests.RequestException as e:
+        log.error("arXiv /more request failed: %s", e)
+        raise HTTPException(502, f"arXiv API error: {e}")

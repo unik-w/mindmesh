@@ -2,17 +2,22 @@ export {
   addCardComment,
   clearMindMeshApiSession,
   createSession,
+  fetchFeedSummaries,
   getDiscoveryFeed,
   getProfile,
   getSavedInterests,
   getSessionFeed,
   getSponsoredResearches,
+  getUserLikedPapers,
   getUserLikes,
   getPersistedComments,
   joinSession,
   listSessions,
+  loadMoreArxivResults,
+  loadMoreFeedPapers,
   loginWithGoogleIdToken,
   saveInterests,
+  searchArxiv,
   searchAuthors,
   searchPapers,
   setApiBearerToken,
@@ -23,6 +28,7 @@ export {
   uploadPdf,
 } from './api'
 export { ApiHttpError, getApiBaseUrl, isMockApiMode } from './httpClient'
+export type { ArxivMoreResult, ArxivPaper, ArxivSearchResult, FeedSummaryItem, LikedPaper } from './api'
 export type {
   AuthorSearchHit,
   CardComment,

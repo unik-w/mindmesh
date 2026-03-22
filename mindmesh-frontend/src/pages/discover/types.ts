@@ -36,6 +36,6 @@ export type ReelItem =
       categoryLine: string
     }
 
-export type MainPanel = 'feed' | 'discover' | 'authors'
+export type MainPanel = 'feed' | 'discover' | 'authors' | 'likes' | 'arxiv'
 
 export type NewSessionModalStep = 'choose' | 'paper'

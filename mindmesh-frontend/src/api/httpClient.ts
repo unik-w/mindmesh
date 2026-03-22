@@ -11,6 +11,8 @@ export const ROUTES = {
   paperList: '/paper/list',
   paperInsert: '/paper/insert',
   arxivSearch: '/arxiv/search',
+  arxivMore: '/arxiv/more',
+  llmFeedSummary: '/llm/feed-summary',
 } as const
 
 export function getApiBaseUrl(): string {
