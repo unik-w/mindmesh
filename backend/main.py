@@ -1,7 +1,10 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 
 import torch
+
+logging.basicConfig(level=logging.INFO)
 from adapters import AutoAdapterModel
 from dotenv import load_dotenv
 from fastapi import FastAPI

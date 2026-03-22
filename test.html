@@ -23,28 +23,13 @@
       background: #161b22;
       border-bottom: 1px solid #30363d;
     }
+    header h1 { font-size: 20px; font-weight: 600; color: #58a6ff; }
 
-    header h1 {
-      font-size: 20px;
-      font-weight: 600;
-      color: #58a6ff;
-    }
-
-    .user-info {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .user-info img {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-    }
-
+    .user-info { display: flex; align-items: center; gap: 10px; }
+    .user-info img { width: 32px; height: 32px; border-radius: 50%; }
     .user-info span { font-size: 14px; color: #8b949e; }
 
-    .logout-btn {
+    .btn-ghost {
       background: none;
       border: 1px solid #30363d;
       color: #8b949e;
@@ -52,11 +37,11 @@
       border-radius: 6px;
       cursor: pointer;
       font-size: 13px;
+      transition: all 0.15s;
     }
+    .btn-ghost:hover { border-color: #58a6ff; color: #58a6ff; }
 
-    .logout-btn:hover { border-color: #58a6ff; color: #58a6ff; }
-
-    /* Login screen */
+    /* Login */
     #login-screen {
       display: flex;
       flex-direction: column;
@@ -65,23 +50,16 @@
       height: 80vh;
       gap: 24px;
     }
-
-    #login-screen h2 {
-      font-size: 28px;
-      color: #58a6ff;
-    }
-
+    #login-screen h2 { font-size: 28px; color: #58a6ff; }
     #login-screen p { color: #8b949e; }
 
     /* Tabs */
     .tabs {
       display: flex;
-      gap: 0;
       padding: 0 24px;
       background: #161b22;
       border-bottom: 1px solid #30363d;
     }
-
     .tab {
       padding: 12px 20px;
       cursor: pointer;
@@ -89,13 +67,12 @@
       border-bottom: 2px solid transparent;
       font-size: 14px;
       font-weight: 500;
-      transition: all 0.2s;
+      transition: all 0.15s;
     }
-
     .tab:hover { color: #e1e4e8; }
     .tab.active { color: #58a6ff; border-bottom-color: #58a6ff; }
 
-    /* Search bar */
+    /* Search */
     .search-bar {
       display: flex;
       gap: 8px;
@@ -103,7 +80,6 @@
       max-width: 800px;
       margin: 0 auto;
     }
-
     .search-bar input {
       flex: 1;
       padding: 10px 14px;
@@ -114,43 +90,23 @@
       font-size: 14px;
       outline: none;
     }
-
     .search-bar input::placeholder { color: #484f58; }
     .search-bar input:focus { border-color: #58a6ff; }
-
-    .search-clear {
-      background: none;
-      border: 1px solid #30363d;
-      color: #8b949e;
-      padding: 8px 14px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 13px;
-    }
-
-    .search-clear:hover { border-color: #f85149; color: #f85149; }
 
     /* Content */
     .content { padding: 24px; max-width: 800px; margin: 0 auto; }
 
+    /* Paper cards */
     .paper-card {
       background: #161b22;
       border: 1px solid #30363d;
       border-radius: 8px;
       padding: 20px;
       margin-bottom: 12px;
-      transition: border-color 0.2s;
+      transition: border-color 0.15s;
     }
-
     .paper-card:hover { border-color: #58a6ff; }
-
-    .paper-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: #e1e4e8;
-      margin-bottom: 8px;
-    }
-
+    .paper-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
     .paper-summary {
       font-size: 13px;
       color: #8b949e;
@@ -161,27 +117,26 @@
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
-
     .paper-meta {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      font-size: 12px;
-      color: #6e7681;
     }
-
-    .paper-categories {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
+    .paper-categories { display: flex; gap: 6px; flex-wrap: wrap; }
     .category-tag {
       background: #1f2937;
       color: #58a6ff;
       padding: 2px 8px;
       border-radius: 12px;
       font-size: 11px;
+    }
+    .similarity-badge {
+      background: #1f6feb22;
+      color: #58a6ff;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
     }
 
     .like-btn {
@@ -192,76 +147,43 @@
       border-radius: 6px;
       cursor: pointer;
       font-size: 13px;
-      transition: all 0.2s;
+      transition: all 0.15s;
     }
-
     .like-btn:hover { border-color: #f778ba; color: #f778ba; }
     .like-btn.liked { border-color: #f778ba; color: #f778ba; background: #f778ba18; }
 
-    .similarity-badge {
-      background: #1f6feb22;
-      color: #58a6ff;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 11px;
-      font-weight: 500;
+    .empty-state { text-align: center; padding: 60px 20px; color: #6e7681; font-size: 14px; }
+
+    /* Spinner */
+    .spinner-wrap { display: flex; justify-content: center; padding: 40px 0; }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid #30363d;
+      border-top-color: #58a6ff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
     }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-    .empty-state {
-      text-align: center;
-      padding: 60px 20px;
-      color: #6e7681;
-    }
-
-    .empty-state p { margin-top: 8px; font-size: 14px; }
-
-    .loading {
-      text-align: center;
-      padding: 40px;
-      color: #6e7681;
-    }
-
-    /* Modal overlay */
+    /* Modal */
     .modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.7);
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      display: flex; align-items: center; justify-content: center;
       z-index: 100;
     }
-
     .modal {
       background: #161b22;
       border: 1px solid #30363d;
       border-radius: 12px;
       padding: 32px;
-      max-width: 560px;
-      width: 90%;
-      max-height: 80vh;
-      overflow-y: auto;
+      max-width: 560px; width: 90%;
+      max-height: 80vh; overflow-y: auto;
     }
+    .modal h2 { font-size: 22px; margin-bottom: 8px; }
+    .modal p { color: #8b949e; font-size: 14px; margin-bottom: 20px; }
 
-    .modal h2 {
-      font-size: 22px;
-      color: #e1e4e8;
-      margin-bottom: 8px;
-    }
-
-    .modal p {
-      color: #8b949e;
-      font-size: 14px;
-      margin-bottom: 20px;
-    }
-
-    .interest-chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 24px;
-    }
-
+    .interest-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
     .interest-chip {
       padding: 8px 16px;
       border-radius: 20px;
@@ -270,97 +192,46 @@
       color: #8b949e;
       cursor: pointer;
       font-size: 13px;
-      transition: all 0.2s;
+      transition: all 0.15s;
       user-select: none;
     }
+    .interest-chip:hover { border-color: #58a6ff; color: #e1e4e8; }
+    .interest-chip.selected { background: #1f6feb22; border-color: #58a6ff; color: #58a6ff; }
 
-    .interest-chip:hover {
-      border-color: #58a6ff;
-      color: #e1e4e8;
+    .btn-primary {
+      background: #238636; color: #fff; border: none;
+      padding: 10px 24px; border-radius: 6px;
+      font-size: 14px; font-weight: 500; cursor: pointer;
+      transition: background 0.15s;
     }
+    .btn-primary:hover { background: #2ea043; }
+    .btn-primary:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
 
-    .interest-chip.selected {
-      background: #1f6feb22;
-      border-color: #58a6ff;
-      color: #58a6ff;
-    }
-
-    .modal-btn {
-      background: #238636;
-      color: #fff;
-      border: none;
-      padding: 10px 24px;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .modal-btn:hover { background: #2ea043; }
-
-    .modal-btn:disabled {
-      background: #21262d;
-      color: #484f58;
-      cursor: not-allowed;
-    }
-
-    .profile-btn {
-      background: none;
-      border: 1px solid #30363d;
-      color: #8b949e;
-      padding: 4px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 13px;
-    }
-
-    .profile-btn:hover { border-color: #58a6ff; color: #58a6ff; }
-
-    /* Profile section */
-    .profile-section {
-      max-width: 560px;
-      margin: 0 auto;
-    }
-
-    .profile-section h3 {
-      font-size: 18px;
-      margin-bottom: 16px;
-      color: #e1e4e8;
-    }
-
-    .profile-current {
-      margin-bottom: 20px;
-    }
-
-    .profile-current span {
-      font-size: 13px;
-      color: #8b949e;
-    }
+    /* Profile */
+    .profile-section { max-width: 560px; margin: 0 auto; }
+    .profile-section h3 { font-size: 18px; margin-bottom: 16px; }
+    .profile-current { margin-bottom: 20px; font-size: 13px; color: #8b949e; }
   </style>
 </head>
 <body>
 
-  <!-- Login screen -->
   <div id="login-screen">
     <h2>MindMesh</h2>
     <p>Discover academic papers tailored to your interests</p>
     <div id="g_id_onload"
          data-client_id="649424989910-hipe35c0s1ttafh81kub2s9h6qamnfil.apps.googleusercontent.com"
-         data-callback="onGoogleLogin">
-    </div>
+         data-callback="onGoogleLogin"></div>
     <div class="g_id_signin" data-type="standard" data-size="large" data-theme="filled_black"></div>
   </div>
 
-  <!-- App (hidden until login) -->
   <div id="app" style="display:none">
     <header>
       <h1>MindMesh</h1>
       <div class="user-info">
         <img id="user-avatar" src="" alt="">
         <span id="user-name"></span>
-        <button class="profile-btn" onclick="switchTab('profile')">Profile</button>
-        <button class="logout-btn" onclick="logout()">Logout</button>
+        <button class="btn-ghost" onclick="switchTab('profile')">Profile</button>
+        <button class="btn-ghost" onclick="logout()">Logout</button>
       </div>
     </header>
 
@@ -371,417 +242,293 @@
     </div>
 
     <div class="search-bar" id="search-bar" style="display:none">
-      <input type="text" id="search-input" placeholder="Search papers by title, author, topic..."
+      <input type="text" id="search-input" placeholder="Search by title, author, DOI, or arXiv URL..."
              onkeydown="if(event.key==='Enter') doSearch()">
-      <button class="search-clear" id="search-clear" style="display:none" onclick="clearSearch()">Clear</button>
+      <button class="btn-ghost" id="search-clear" style="display:none" onclick="clearSearch()">Clear</button>
     </div>
 
-    <div class="content" id="content">
-      <div class="loading">Loading papers...</div>
-    </div>
+    <div class="content" id="content"></div>
   </div>
 
-  <!-- Onboarding modal -->
   <div id="onboarding-modal" class="modal-overlay" style="display:none">
     <div class="modal">
       <h2>Welcome to MindMesh!</h2>
-      <p>Select the topics you're interested in so we can personalize your experience.</p>
+      <p>Select topics you're interested in to personalize your feed.</p>
       <div class="interest-chips" id="onboarding-chips"></div>
-      <button class="modal-btn" id="onboarding-save" disabled onclick="saveOnboarding()">
-        Continue
-      </button>
+      <button class="btn-primary" id="onboarding-save" disabled onclick="saveOnboarding()">Continue</button>
     </div>
   </div>
 
-  <script>
-    const API = "http://127.0.0.1:8000";
-    const PAGE_SIZE = 20;
+<script>
+const API = "http://127.0.0.1:8000";
+const PAGE_SIZE = 20;
+const INTERESTS = [
+  "Computer Science","Machine Learning","Artificial Intelligence",
+  "Natural Language Processing","Computer Vision","Robotics",
+  "Mathematics","Physics","Chemistry","Biology",
+  "Medicine","Neuroscience","Psychology",
+  "Economics","Political Science","Sociology",
+  "Philosophy","Linguistics","Education",
+  "Engineering","Materials Science","Environmental Science",
+  "Data Science","Cryptography","Quantum Computing",
+];
 
-    const AVAILABLE_INTERESTS = [
-      "Computer Science", "Machine Learning", "Artificial Intelligence",
-      "Natural Language Processing", "Computer Vision", "Robotics",
-      "Mathematics", "Physics", "Chemistry", "Biology",
-      "Medicine", "Neuroscience", "Psychology",
-      "Economics", "Political Science", "Sociology",
-      "Philosophy", "Linguistics", "Education",
-      "Engineering", "Materials Science", "Environmental Science",
-      "Data Science", "Cryptography", "Quantum Computing",
-    ];
+let token = null, currentUser = null, currentTab = "all";
+let likedPapers = [], likedPaperIds = new Set();
+let offset = 0, loading = false, hasMore = true;
+let searchQuery = "", searchOffset = 0;
 
-    let token = null;
-    let currentUser = null;
-    let currentTab = "all";
-    let likedPaperIds = new Set();
-    let offset = 0;
-    let loading = false;
-    let hasMore = true;
+// ── Helpers ───────────────────────────
+function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+function showSpinner(el) { el.innerHTML = '<div class="spinner-wrap"><div class="spinner"></div></div>'; }
 
-    // ── Auth ──────────────────────────────
+async function apiFetch(path) {
+  const r = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!r.ok) throw new Error(r.status);
+  return r.json();
+}
 
-    async function onGoogleLogin(response) {
-      try {
-        const res = await fetch(`${API}/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: response.credential }),
-        });
-        if (!res.ok) throw new Error("Login failed");
-        const data = await res.json();
-        token = data.token;
-        currentUser = data.user;
-        localStorage.setItem("token", token);
-        showApp();
-      } catch (e) {
-        alert("Login failed: " + e.message);
-      }
+// ── Auth ──────────────────────────────
+async function onGoogleLogin(response) {
+  const r = await fetch(`${API}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: response.credential }),
+  });
+  if (!r.ok) return alert("Login failed");
+  const data = await r.json();
+  token = data.token;
+  currentUser = data.user;
+  localStorage.setItem("token", token);
+  showApp();
+}
+
+function logout() {
+  token = null; currentUser = null;
+  likedPapers = []; likedPaperIds.clear();
+  localStorage.removeItem("token");
+  document.getElementById("app").style.display = "none";
+  document.getElementById("login-screen").style.display = "flex";
+}
+
+async function tryResume() {
+  const saved = localStorage.getItem("token");
+  if (!saved) return;
+  token = saved;
+  try {
+    const r = await fetch(`${API}/auth/me`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) throw 0;
+    currentUser = await r.json();
+    showApp();
+  } catch { localStorage.removeItem("token"); }
+}
+
+function getUserInterests() {
+  try { const r = currentUser.interests; return Array.isArray(r) ? r : JSON.parse(r || "[]"); }
+  catch { return []; }
+}
+
+function showApp() {
+  document.getElementById("login-screen").style.display = "none";
+  document.getElementById("app").style.display = "block";
+  document.getElementById("user-name").textContent = currentUser.name;
+  document.getElementById("user-avatar").src = currentUser.profile_picture || "";
+  if (!getUserInterests().length) showOnboarding();
+  else loadLikes().then(() => switchTab("all"));
+}
+
+// ── Onboarding ────────────────────────
+function showOnboarding() {
+  document.getElementById("onboarding-chips").innerHTML =
+    INTERESTS.map(t => `<div class="interest-chip" onclick="toggleChip(this)">${esc(t)}</div>`).join("");
+  document.getElementById("onboarding-save").disabled = true;
+  document.getElementById("onboarding-modal").style.display = "flex";
+}
+
+function toggleChip(el) {
+  el.classList.toggle("selected");
+  const n = el.closest(".interest-chips").querySelectorAll(".selected").length;
+  const btn = el.closest(".modal,.profile-section").querySelector(".btn-primary");
+  if (btn) btn.disabled = n === 0;
+}
+
+async function saveOnboarding() {
+  const chips = document.querySelectorAll("#onboarding-chips .selected");
+  await saveInterests(Array.from(chips).map(c => c.textContent));
+  document.getElementById("onboarding-modal").style.display = "none";
+  loadLikes().then(() => switchTab("all"));
+}
+
+async function saveInterests(interests) {
+  const r = await fetch(`${API}/user/update_interests`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ interests }),
+  });
+  if (!r.ok) throw new Error("Failed to save");
+  currentUser = await r.json();
+}
+
+// ── Data ──────────────────────────────
+async function loadLikes() {
+  try { likedPapers = await apiFetch("/user/likes"); likedPaperIds = new Set(likedPapers.map(p => p.id)); }
+  catch { likedPapers = []; likedPaperIds = new Set(); }
+}
+
+async function loadPage() {
+  if (currentTab === "likes") return likedPapers;
+  const ep = currentTab === "all"
+    ? `/paper/list?limit=${PAGE_SIZE}&offset=${offset}`
+    : `/user/feed?limit=${PAGE_SIZE}&offset=${offset}`;
+  return apiFetch(ep);
+}
+
+// ── Search ────────────────────────────
+async function insertPaper(paper) {
+  try {
+    await fetch(`${API}/paper/insert`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(paper),
+    });
+  } catch {}
+}
+
+async function doSearch(append = false) {
+  const q = append ? searchQuery : document.getElementById("search-input").value.trim();
+  if (!q) return;
+  searchQuery = q;
+  const content = document.getElementById("content");
+  if (!append) { showSpinner(content); searchOffset = 0; }
+  document.getElementById("search-clear").style.display = "block";
+  try {
+    const data = await apiFetch(`/arxiv/search?q=${encodeURIComponent(q)}&start=${searchOffset}&max_results=${PAGE_SIZE}`);
+    const papers = data.papers || [];
+    hasMore = papers.length >= PAGE_SIZE && searchOffset + papers.length < data.total_results;
+    searchOffset += papers.length;
+    renderPapers(papers, append);
+    for (const p of papers) await insertPaper(p);
+  } catch {
+    if (!append) content.innerHTML = '<div class="empty-state">Search failed. arXiv may be rate-limiting — wait a moment and try again.</div>';
+    hasMore = false;
+  }
+}
+
+function clearSearch() {
+  searchQuery = "";
+  document.getElementById("search-input").value = "";
+  document.getElementById("search-clear").style.display = "none";
+  switchTab(currentTab);
+}
+
+// ── Like / Dislike ────────────────────
+async function toggleLike(paperId) {
+  const liked = likedPaperIds.has(paperId);
+  await fetch(`${API}/user/${liked ? "dislike" : "like"}`, {
+    method: liked ? "DELETE" : "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ paper_id: paperId }),
+  });
+  if (liked) likedPaperIds.delete(paperId); else likedPaperIds.add(paperId);
+  loadLikes();
+  updateLikeButtons();
+}
+
+function updateLikeButtons() {
+  document.querySelectorAll(".like-btn").forEach(btn => {
+    const liked = likedPaperIds.has(btn.dataset.paperId);
+    btn.className = `like-btn ${liked ? "liked" : ""}`;
+    btn.textContent = liked ? "\u2665 Liked" : "\u2661 Like";
+  });
+}
+
+// ── Render ────────────────────────────
+function renderPapers(papers, append = false) {
+  const content = document.getElementById("content");
+  if (!papers.length && !append) {
+    const msgs = { recommended: "Like some papers to get recommendations!", likes: "You haven't liked any papers yet." };
+    content.innerHTML = `<div class="empty-state">${msgs[currentTab] || "No papers found."}</div>`;
+    return;
+  }
+  const html = papers.map(p => {
+    const liked = likedPaperIds.has(p.id);
+    const cats = (p.categories || []).slice(0, 3).map(c => `<span class="category-tag">${esc(c)}</span>`).join("");
+    const sim = p.similarity != null ? `<span class="similarity-badge">${(p.similarity*100).toFixed(0)}% match</span>` : "";
+    return `<div class="paper-card">
+      <div class="paper-title">${esc(p.title)}</div>
+      <div class="paper-summary">${esc(p.summary || "")}</div>
+      <div class="paper-meta">
+        <div class="paper-categories">${cats}${sim}</div>
+        <button class="like-btn ${liked?"liked":""}" data-paper-id="${esc(p.id)}" onclick="toggleLike('${esc(p.id)}')">${liked?"\u2665 Liked":"\u2661 Like"}</button>
+      </div>
+    </div>`;
+  }).join("");
+  if (append) content.insertAdjacentHTML("beforeend", html);
+  else content.innerHTML = html;
+}
+
+// ── Infinite scroll ───────────────────
+async function loadMore() {
+  if (loading || !hasMore) return;
+  loading = true;
+  try {
+    if (searchQuery) { await doSearch(true); }
+    else {
+      const papers = await loadPage();
+      if (papers.length < PAGE_SIZE) hasMore = false;
+      if (papers.length) { renderPapers(papers, true); offset += papers.length; }
     }
+  } catch { hasMore = false; }
+  loading = false;
+}
 
-    function logout() {
-      token = null;
-      currentUser = null;
-      likedPaperIds.clear();
-      localStorage.removeItem("token");
-      document.getElementById("app").style.display = "none";
-      document.getElementById("login-screen").style.display = "flex";
-    }
+window.addEventListener("scroll", () => {
+  if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 300) loadMore();
+});
 
-    async function tryResume() {
-      const saved = localStorage.getItem("token");
-      if (!saved) return;
-      token = saved;
-      try {
-        const res = await fetch(`${API}/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (!res.ok) throw new Error();
-        currentUser = await res.json();
-        showApp();
-      } catch {
-        localStorage.removeItem("token");
-      }
-    }
+// ── Tabs ──────────────────────────────
+async function switchTab(tab) {
+  currentTab = tab; offset = 0; hasMore = true;
+  searchQuery = "";
+  document.getElementById("search-input").value = "";
+  document.getElementById("search-clear").style.display = "none";
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
 
-    function getUserInterests() {
-      try {
-        const raw = currentUser.interests;
-        if (Array.isArray(raw)) return raw;
-        return JSON.parse(raw || "[]");
-      } catch { return []; }
-    }
+  const content = document.getElementById("content");
+  const searchBar = document.getElementById("search-bar");
 
-    function showApp() {
-      document.getElementById("login-screen").style.display = "none";
-      document.getElementById("app").style.display = "block";
-      document.getElementById("user-name").textContent = currentUser.name;
-      document.getElementById("user-avatar").src = currentUser.profile_picture || "";
+  if (tab === "profile") { searchBar.style.display = "none"; renderProfile(content); return; }
+  searchBar.style.display = "flex";
+  showSpinner(content);
 
-      const interests = getUserInterests();
-      if (!interests.length) {
-        showOnboarding();
-      } else {
-        loadLikes().then(() => switchTab("all"));
-      }
-    }
+  try {
+    const papers = await loadPage();
+    hasMore = tab !== "likes" && papers.length >= PAGE_SIZE;
+    offset = papers.length;
+    renderPapers(papers);
+  } catch { content.innerHTML = '<div class="empty-state">Error loading papers.</div>'; }
+}
 
-    // ── Onboarding ────────────────────────
+function renderProfile(content) {
+  const interests = getUserInterests();
+  content.innerHTML = `<div class="profile-section">
+    <h3>Your Interests</h3>
+    <div class="profile-current">${interests.length ? interests.join(", ") : "No interests selected yet."}</div>
+    <div class="interest-chips" id="profile-chips">
+      ${INTERESTS.map(t => `<div class="interest-chip ${interests.includes(t)?"selected":""}" onclick="toggleChip(this)">${esc(t)}</div>`).join("")}
+    </div>
+    <button class="btn-primary" onclick="saveProfile()">Save Interests</button>
+  </div>`;
+}
 
-    function showOnboarding() {
-      const container = document.getElementById("onboarding-chips");
-      container.innerHTML = AVAILABLE_INTERESTS.map((t) =>
-        `<div class="interest-chip" onclick="toggleChip(this)">${esc(t)}</div>`
-      ).join("");
-      document.getElementById("onboarding-save").disabled = true;
-      document.getElementById("onboarding-modal").style.display = "flex";
-    }
+async function saveProfile() {
+  const chips = document.querySelectorAll("#profile-chips .selected");
+  await saveInterests(Array.from(chips).map(c => c.textContent));
+  renderProfile(document.getElementById("content"));
+}
 
-    function toggleChip(el) {
-      el.classList.toggle("selected");
-      const selected = document.querySelectorAll("#onboarding-chips .selected, #profile-chips .selected");
-      const saveBtn = document.getElementById("onboarding-save") || document.getElementById("profile-save");
-      if (saveBtn) saveBtn.disabled = selected.length === 0;
-    }
-
-    async function saveOnboarding() {
-      const chips = document.querySelectorAll("#onboarding-chips .selected");
-      const interests = Array.from(chips).map((c) => c.textContent);
-      await saveInterests(interests);
-      document.getElementById("onboarding-modal").style.display = "none";
-      loadLikes().then(() => switchTab("all"));
-    }
-
-    async function saveInterests(interests) {
-      const res = await fetch(`${API}/user/update_interests`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ interests }),
-      });
-      if (!res.ok) throw new Error("Failed to save interests");
-      currentUser = await res.json();
-    }
-
-    // ── Data ──────────────────────────────
-
-    async function apiFetch(path) {
-      const res = await fetch(`${API}${path}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(`API error ${res.status}`);
-      return res.json();
-    }
-
-    let likedPapers = [];
-
-    async function loadLikes() {
-      try {
-        likedPapers = await apiFetch("/user/likes");
-        likedPaperIds = new Set(likedPapers.map((p) => p.id));
-      } catch {
-        likedPapers = [];
-        likedPaperIds = new Set();
-      }
-    }
-
-    async function loadPage() {
-      if (currentTab === "likes") return likedPapers;
-      const endpoint = currentTab === "all"
-        ? `/paper/list?limit=${PAGE_SIZE}&offset=${offset}`
-        : `/user/feed?limit=${PAGE_SIZE}&offset=${offset}`;
-      return apiFetch(endpoint);
-    }
-
-    // ── Search ─────────────────────────
-
-    let searchQuery = "";
-    let searchOffset = 0;
-
-    async function doSearch(append = false) {
-      const q = append ? searchQuery : document.getElementById("search-input").value.trim();
-      if (!q) return;
-      searchQuery = q;
-
-      const content = document.getElementById("content");
-      if (!append) {
-        content.innerHTML = `<div class="loading">Searching arXiv...</div>`;
-        searchOffset = 0;
-      }
-      document.getElementById("search-clear").style.display = "block";
-
-      try {
-        const data = await apiFetch(
-          `/arxiv/search?q=${encodeURIComponent(q)}&start=${searchOffset}&max_results=${PAGE_SIZE}`
-        );
-        const papers = data.papers || [];
-        hasMore = papers.length >= PAGE_SIZE && searchOffset + papers.length < data.total_results;
-        searchOffset += papers.length;
-        renderPapers(papers, append);
-      } catch (e) {
-        if (!append) content.innerHTML = `<div class="empty-state"><p>Search failed</p></div>`;
-        hasMore = false;
-      }
-    }
-
-    function clearSearch() {
-      searchQuery = "";
-      document.getElementById("search-input").value = "";
-      document.getElementById("search-clear").style.display = "none";
-      switchTab(currentTab);
-    }
-
-    // ── Like / Dislike ───────────────────
-
-    async function toggleLike(paperId) {
-      const isLiked = likedPaperIds.has(paperId);
-      try {
-        if (isLiked) {
-          await fetch(`${API}/user/dislike`, {
-            method: "DELETE",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ paper_id: paperId }),
-          });
-          likedPaperIds.delete(paperId);
-        } else {
-          await fetch(`${API}/user/like`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ paper_id: paperId }),
-          });
-          likedPaperIds.add(paperId);
-        }
-        loadLikes().then(() => updateLikeButtons());
-      } catch (e) {
-        alert("Error: " + e.message);
-      }
-    }
-
-    // ── Rendering ────────────────────────
-
-    function renderPapers(papers, append = false) {
-      const content = document.getElementById("content");
-      const showSimilarity = currentTab === "recommended";
-
-      if (!papers.length && !append) {
-        const msg = currentTab === "recommended"
-          ? "Like some papers first to get recommendations!"
-          : currentTab === "likes"
-          ? "You haven't liked any papers yet."
-          : "No papers found.";
-        content.innerHTML = `<div class="empty-state"><p>${msg}</p></div>`;
-        return;
-      }
-
-      const html = papers.map((p) => {
-        const liked = likedPaperIds.has(p.id);
-        const categories = (p.categories || []).slice(0, 3);
-        const similarity = p.similarity != null
-          ? `<span class="similarity-badge">${(p.similarity * 100).toFixed(0)}% match</span>`
-          : "";
-        return `
-          <div class="paper-card">
-            <div class="paper-title">${esc(p.title)}</div>
-            <div class="paper-summary">${esc(p.summary || "")}</div>
-            <div class="paper-meta">
-              <div class="paper-categories">
-                ${categories.map((c) => `<span class="category-tag">${esc(c)}</span>`).join("")}
-                ${similarity}
-              </div>
-              <button class="like-btn ${liked ? "liked" : ""}" data-paper-id="${esc(p.id)}" onclick="toggleLike('${esc(p.id)}')">
-                ${liked ? "♥ Liked" : "♡ Like"}
-              </button>
-            </div>
-          </div>`;
-      }).join("");
-
-      if (append) {
-        content.insertAdjacentHTML("beforeend", html);
-      } else {
-        content.innerHTML = html;
-      }
-    }
-
-    async function loadMore() {
-      if (loading || !hasMore) return;
-      loading = true;
-      try {
-        if (searchQuery) {
-          await doSearch(true);
-        } else {
-          const papers = await loadPage();
-          if (papers.length < PAGE_SIZE) hasMore = false;
-          if (papers.length > 0) {
-            renderPapers(papers, true);
-            offset += papers.length;
-          }
-        }
-      } catch {
-        hasMore = false;
-      }
-      loading = false;
-    }
-
-    function onScroll() {
-      const nearBottom = window.innerHeight + window.scrollY >= document.body.offsetHeight - 300;
-      if (nearBottom) loadMore();
-    }
-
-    window.addEventListener("scroll", onScroll);
-
-    function esc(s) {
-      const d = document.createElement("div");
-      d.textContent = s;
-      return d.innerHTML;
-    }
-
-    // ── Tabs ─────────────────────────────
-
-    async function switchTab(tab) {
-      currentTab = tab;
-      offset = 0;
-      hasMore = true;
-      document.querySelectorAll(".tab").forEach((t) =>
-        t.classList.toggle("active", t.dataset.tab === tab)
-      );
-
-      const content = document.getElementById("content");
-      const searchBar = document.getElementById("search-bar");
-
-      searchQuery = "";
-      document.getElementById("search-input").value = "";
-      document.getElementById("search-clear").style.display = "none";
-
-      if (tab === "profile") {
-        searchBar.style.display = "none";
-        renderProfile(content);
-        return;
-      }
-
-      searchBar.style.display = "flex";
-
-      content.innerHTML = `<div class="loading">Loading...</div>`;
-
-      try {
-        const papers = await loadPage();
-        if (tab === "likes") hasMore = false;
-        else if (papers.length < PAGE_SIZE) hasMore = false;
-        offset = papers.length;
-        renderPapers(papers);
-      } catch (e) {
-        content.innerHTML = `<div class="empty-state"><p>Error loading papers</p></div>`;
-      }
-    }
-
-    function renderProfile(content) {
-      const interests = getUserInterests();
-      content.innerHTML = `
-        <div class="profile-section">
-          <h3>Your Interests</h3>
-          <div class="profile-current">
-            <span>${interests.length ? interests.join(", ") : "No interests selected yet."}</span>
-          </div>
-          <p style="color:#8b949e; font-size:14px; margin-bottom:16px;">
-            Select or update your interests:
-          </p>
-          <div class="interest-chips" id="profile-chips">
-            ${AVAILABLE_INTERESTS.map((t) =>
-              `<div class="interest-chip ${interests.includes(t) ? "selected" : ""}" onclick="toggleChip(this)">${esc(t)}</div>`
-            ).join("")}
-          </div>
-          <button class="modal-btn" id="profile-save" onclick="saveProfile()">
-            Save Interests
-          </button>
-        </div>`;
-    }
-
-    async function saveProfile() {
-      const chips = document.querySelectorAll("#profile-chips .selected");
-      const interests = Array.from(chips).map((c) => c.textContent);
-      try {
-        await saveInterests(interests);
-        renderProfile(document.getElementById("content"));
-      } catch (e) {
-        alert("Error saving interests: " + e.message);
-      }
-    }
-
-    function updateLikeButtons() {
-      document.querySelectorAll(".like-btn").forEach((btn) => {
-        const id = btn.dataset.paperId;
-        const liked = likedPaperIds.has(id);
-        btn.className = `like-btn ${liked ? "liked" : ""}`;
-        btn.textContent = liked ? "♥ Liked" : "♡ Like";
-      });
-    }
-
-    // ── Init ─────────────────────────────
-    tryResume();
-  </script>
+// ── Init ──────────────────────────────
+tryResume();
+</script>
 </body>
 </html>

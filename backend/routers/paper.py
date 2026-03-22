@@ -1,8 +1,12 @@
+import logging
+
 import torch
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from backend import deps
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/paper", tags=["Paper"])
 
@@ -80,10 +84,15 @@ def list_papers(
 
 @router.post("/insert")
 def insert_paper(body: PaperInsertRequest, user: dict = Depends(deps.get_current_user)):
+    existing = deps.db.table("papers").select("id").eq("id", body.id).execute()
+    if existing.data:
+        return existing.data[0]
+
     embedding = _compute_embedding(body.title, body.summary)
 
     row = body.model_dump()
     row["embedding"] = "[" + ",".join(str(x) for x in embedding) + "]"
 
     result = deps.db.table("papers").upsert(row).execute()
+    log.info("Inserted new paper: %s", body.id)
     return result.data[0]

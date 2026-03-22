@@ -6,7 +6,6 @@ import requests
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend import deps
-from backend.routers.paper import _compute_embedding
 
 log = logging.getLogger(__name__)
 
@@ -52,27 +51,6 @@ def _parse_feed(xml: str) -> dict[str, Any]:
         "items_per_page": int(_txt(root.find(f"{OS}itemsPerPage")) or 0),
         "papers": [_parse_entry(e) for e in root.findall(f"{A}entry")],
     }
-
-
-def _upsert_papers(papers: list[dict[str, Any]]) -> None:
-    rows = []
-    for p in papers:
-        try:
-            embedding = _compute_embedding(p.get("title", ""), p.get("summary"))
-            rows.append({
-                "id": p["id"],
-                "title": p.get("title", ""),
-                "summary": p.get("summary"),
-                "authors": p.get("authors", []),
-                "categories": p.get("categories", []),
-                "links": p.get("links", {}),
-                "published": p.get("published"),
-                "embedding": "[" + ",".join(str(x) for x in embedding) + "]",
-            })
-        except Exception:
-            log.exception("Failed to embed paper %s", p.get("id"))
-    if rows:
-        deps.db.table("papers").upsert(rows).execute()
 
 
 def _extract_arxiv_id(q: str) -> str | None:
@@ -131,6 +109,4 @@ def search_arxiv(
         log.error("arXiv returned %s: %s", resp.status_code, resp.text[:500])
         raise HTTPException(502, f"arXiv returned status {resp.status_code}")
 
-    data = _parse_feed(resp.text)
-    _upsert_papers(data.get("papers", []))
-    return data
+    return _parse_feed(resp.text)
