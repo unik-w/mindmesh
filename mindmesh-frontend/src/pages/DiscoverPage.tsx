@@ -7,15 +7,30 @@ import {
   type MouseEvent as ReactMouseEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import {
-  GoogleAuthProvider,
-  onAuthStateChanged,
-  signInWithPopup,
-  signOut,
-  type User,
-} from 'firebase/auth'
+import type { User } from '@supabase/supabase-js'
 import { Link } from 'react-router-dom'
-import { auth } from '../firebase'
+import {
+  addCardComment,
+  createSession,
+  getDiscoveryFeed,
+  getPersistedComments,
+  getSavedInterests,
+  getUserLikes,
+  joinSession,
+  listSessions,
+  saveInterests,
+  searchPapers,
+  setApiBearerToken,
+  setCardLike,
+  syncAuthToken,
+  uploadPdf,
+} from '../api'
+import {
+  supabaseAccountInitials,
+  supabaseAvatarUrl,
+  supabaseDisplayName,
+} from '../auth/supabaseUser'
+import { supabase } from '../supabaseClient'
 import { btnBase, btnPrimary, gradientText } from '../uiClasses'
 import {
   arxivAbsUrl,
@@ -26,12 +41,7 @@ import {
 } from './discover/arxiv'
 import { DiscoverAuthorsPanel } from './discover/DiscoverAuthorsPanel'
 import { DiscoverFeedReel } from './discover/DiscoverFeedReel'
-import {
-  demoProfile,
-  feedItems,
-  INTERESTS,
-  sessions,
-} from './discover/data'
+import { demoProfile, feedItems, INTERESTS } from './discover/data'
 import {
   sessionRowActive,
   sessionRowBtn,
@@ -41,6 +51,7 @@ import {
 } from './discover/discoverNavStyles'
 import { interleaveFeedPromos } from './discover/feedPromos'
 import { relatedPapersFor } from './discover/relatedPapers'
+import type { PaperSearchHit, SessionSummary } from '../api/types'
 import type { FeedItem, MainPanel, NewSessionModalStep } from './discover/types'
 import {
   IconAuthor,
@@ -51,19 +62,6 @@ import {
   SidebarNavIconDiscover,
   SidebarNavIconSearch,
 } from './discover/icons'
-
-function accountInitials(user: User): string {
-  const name = user.displayName?.trim()
-  if (name) {
-    const parts = name.split(/\s+/).filter(Boolean)
-    if (parts.length >= 2) {
-      return `${parts[0]![0]!}${parts[parts.length - 1]![0]!}`.toUpperCase()
-    }
-    return name.slice(0, 2).toUpperCase()
-  }
-  const local = user.email?.split('@')[0] ?? '?'
-  return local.slice(0, 2).toUpperCase()
-}
 
 export default function DiscoverPage() {
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
@@ -93,44 +91,124 @@ export default function DiscoverPage() {
   const [commentExtras, setCommentExtras] = useState<
     Record<string, { id: string; author: string; body: string }[]>
   >({})
+  const [paperSheetPost, setPaperSheetPost] = useState<FeedItem | null>(null)
+
+  const [workspaceSessions, setWorkspaceSessions] = useState<SessionSummary[]>(
+    [],
+  )
+  const [discoveryFeedItems, setDiscoveryFeedItems] = useState<FeedItem[]>([])
+  const [feedLoading, setFeedLoading] = useState(false)
+  const [sessionsLoading, setSessionsLoading] = useState(false)
+  const [pdfFile, setPdfFile] = useState<File | null>(null)
+  const [paperHits, setPaperHits] = useState<PaperSearchHit[]>([])
+  const [paperSearchLoading, setPaperSearchLoading] = useState(false)
+
+  const selectedInterestKey = useMemo(
+    () => [...selected].sort().join(','),
+    [selected],
+  )
+
+  const commentAuthorName =
+    supabaseDisplayName(authUser)?.trim() ||
+    authUser?.email?.split('@')[0] ||
+    demoProfile.username
 
   const togglePostLike = useCallback((postId: string) => {
-    setLikedPosts((prev) => ({ ...prev, [postId]: !prev[postId] }))
+    setLikedPosts((prev) => {
+      const prevLiked = Boolean(prev[postId])
+      const nextLiked = !prevLiked
+      const delta = nextLiked ? 1 : -1
+      setDiscoveryFeedItems((items) =>
+        items.map((p) =>
+          p.id === postId ? { ...p, likes: Math.max(0, p.likes + delta) } : p,
+        ),
+      )
+      setWorkspaceSessions((sessions) =>
+        sessions.map((s) => ({
+          ...s,
+          papers: s.papers.map((p) =>
+            p.id === postId
+              ? { ...p, likes: Math.max(0, p.likes + delta) }
+              : p,
+          ),
+        })),
+      )
+      void setCardLike(postId, nextLiked)
+        .then((res) => {
+          setLikedPosts((p) => ({ ...p, [postId]: res.liked }))
+          setDiscoveryFeedItems((items) =>
+            items.map((p) =>
+              p.id === postId ? { ...p, likes: res.likes } : p,
+            ),
+          )
+          setWorkspaceSessions((sessions) =>
+            sessions.map((s) => ({
+              ...s,
+              papers: s.papers.map((p) =>
+                p.id === postId ? { ...p, likes: res.likes } : p,
+              ),
+            })),
+          )
+        })
+        .catch(() => {
+          setLikedPosts((p) => ({ ...p, [postId]: prevLiked }))
+          setDiscoveryFeedItems((items) =>
+            items.map((p) =>
+              p.id === postId ? { ...p, likes: Math.max(0, p.likes - delta) } : p,
+            ),
+          )
+          setWorkspaceSessions((sessions) =>
+            sessions.map((s) => ({
+              ...s,
+              papers: s.papers.map((p) =>
+                p.id === postId
+                  ? { ...p, likes: Math.max(0, p.likes - delta) }
+                  : p,
+              ),
+            })),
+          )
+        })
+      return { ...prev, [postId]: nextLiked }
+    })
   }, [])
 
-  const displayedLikeCount = useCallback(
-    (post: FeedItem) => post.likes + (likedPosts[post.id] ? 1 : 0),
-    [likedPosts],
-  )
+  const displayedLikeCount = useCallback((post: FeedItem) => post.likes, [])
 
-  const displayedCommentCount = useCallback(
-    (post: FeedItem) =>
-      post.comments + (commentExtras[post.id]?.length ?? 0),
-    [commentExtras],
-  )
+  const displayedCommentCount = useCallback((post: FeedItem) => post.comments, [])
 
   const toggleCommentsOpen = useCallback((postId: string) => {
     setCommentsOpenPostId((prev) => (prev === postId ? null : postId))
   }, [])
 
-  const submitComment = useCallback((postId: string) => {
-    setCommentDraftByPost((draftState) => {
-      const body = (draftState[postId] ?? '').trim()
-      if (!body) return draftState
-      const entry = {
-        id: `${postId}-${Date.now()}`,
-        author: demoProfile.username,
-        body,
-      }
-      setCommentExtras((prev) => ({
-        ...prev,
-        [postId]: [...(prev[postId] ?? []), entry],
-      }))
-      return { ...draftState, [postId]: '' }
-    })
-  }, [])
-
-  const [paperSheetPost, setPaperSheetPost] = useState<FeedItem | null>(null)
+  const submitComment = useCallback(
+    (postId: string) => {
+      setCommentDraftByPost((draftState) => {
+        const body = (draftState[postId] ?? '').trim()
+        if (!body) return draftState
+        void addCardComment(postId, body, commentAuthorName).then((row) => {
+          setCommentExtras((prev) => ({
+            ...prev,
+            [postId]: [...(prev[postId] ?? []), row],
+          }))
+          setDiscoveryFeedItems((prev) =>
+            prev.map((p) =>
+              p.id === postId ? { ...p, comments: p.comments + 1 } : p,
+            ),
+          )
+          setWorkspaceSessions((prev) =>
+            prev.map((s) => ({
+              ...s,
+              papers: s.papers.map((p) =>
+                p.id === postId ? { ...p, comments: p.comments + 1 } : p,
+              ),
+            })),
+          )
+        })
+        return { ...draftState, [postId]: '' }
+      })
+    },
+    [commentAuthorName],
+  )
 
   const closePaperSheet = useCallback(() => setPaperSheetPost(null), [])
 
@@ -152,55 +230,150 @@ export default function DiscoverPage() {
     })
   }, [])
 
-  const handleContinue = () => {
+  const handleContinue = useCallback(async () => {
     if (selected.size === 0) return
-    setPhase('done')
-  }
+    try {
+      await saveInterests([...selected])
+      setPhase('done')
+    } catch {
+      /* ignore */
+    }
+  }, [selected])
 
   useEffect(() => {
-    return onAuthStateChanged(auth, (user) => {
-      setAuthUser(user)
+    if (!supabase) {
       setAuthReady(true)
+      setAuthUser(null)
+      return
+    }
+
+    let cancelled = false
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthUser(session?.user ?? null)
+      setAuthReady(true)
+      if (cancelled) return
+      if (session?.access_token) {
+        void syncAuthToken(session.access_token)
+      } else {
+        setApiBearerToken(null)
+      }
     })
+
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
   }, [])
 
   useEffect(() => {
     if (!authReady || authUser) return
+    setApiBearerToken(null)
     setPhase('interests')
     setSelected(new Set())
     setPaperSheetPost(null)
     setNewSessionOpen(false)
     setMainPanel('discover')
     setActiveSessionId(null)
+    setWorkspaceSessions([])
+    setDiscoveryFeedItems([])
+    setLikedPosts({})
+    setCommentExtras({})
   }, [authReady, authUser])
+
+  useEffect(() => {
+    if (!authReady || !authUser) return
+    let cancelled = false
+    void (async () => {
+      const saved = await getSavedInterests()
+      if (cancelled) return
+      if (saved.length > 0) {
+        setSelected(new Set(saved))
+        setPhase('done')
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [authReady, authUser])
+
+  useEffect(() => {
+    if (!authReady || !authUser || phase !== 'done') return
+    if (selected.size === 0) return
+    let cancelled = false
+    void (async () => {
+      setFeedLoading(true)
+      setSessionsLoading(true)
+      try {
+        const [feed, list, likesMap, commentsMap] = await Promise.all([
+          getDiscoveryFeed([...selected]),
+          listSessions(),
+          getUserLikes(),
+          getPersistedComments(),
+        ])
+        if (cancelled) return
+        setDiscoveryFeedItems(feed)
+        setWorkspaceSessions(list)
+        setLikedPosts(likesMap)
+        setCommentExtras(commentsMap)
+      } catch {
+        if (!cancelled) {
+          setDiscoveryFeedItems(
+            [...feedItems].sort((a, b) => {
+              const ma = a.interestIds.some((id) => selected.has(id))
+              const mb = b.interestIds.some((id) => selected.has(id))
+              return Number(mb) - Number(ma)
+            }),
+          )
+        }
+      } finally {
+        if (!cancelled) {
+          setFeedLoading(false)
+          setSessionsLoading(false)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedInterestKey encodes `selected` (Set)
+  }, [authReady, authUser, phase, selectedInterestKey])
 
   const handleGoogleSignIn = useCallback(async () => {
     setSignInError(null)
+    if (!supabase) {
+      setSignInError(
+        'Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.',
+      )
+      return
+    }
     setSignInBusy(true)
     try {
-      const provider = new GoogleAuthProvider()
-      provider.setCustomParameters({ prompt: 'select_account' })
-      await signInWithPopup(auth, provider)
-    } catch (err: unknown) {
-      const code =
-        err && typeof err === 'object' && 'code' in err
-          ? String((err as { code?: string }).code)
-          : ''
-      if (
-        code !== 'auth/popup-closed-by-user' &&
-        code !== 'auth/cancelled-popup-request'
-      ) {
-        setSignInError('Could not sign in. Please try again.')
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/discover`,
+          queryParams: { prompt: 'select_account' },
+        },
+      })
+      if (error) {
+        setSignInError(error.message || 'Could not sign in. Please try again.')
+        setSignInBusy(false)
       }
-    } finally {
+      /* On success the browser redirects to Google; keep busy until unload */
+    } catch {
+      setSignInError('Could not sign in. Please try again.')
       setSignInBusy(false)
     }
   }, [])
 
   const handleLogout = useCallback(async () => {
     setAccountMenuOpen(false)
+    setApiBearerToken(null)
     try {
-      await signOut(auth)
+      if (supabase) await supabase.auth.signOut()
     } catch {
       /* ignore */
     }
@@ -228,25 +401,76 @@ export default function DiscoverPage() {
     setNewSessionStep('choose')
     setPaperQuery('')
     setPdfLabel(null)
+    setPdfFile(null)
+    setPaperHits([])
     const el = pdfInputRef.current
     if (el) el.value = ''
   }, [])
 
-  const finishNewSessionFromPaperOrPdf = useCallback(() => {
+  const finishNewSessionFromPaperOrPdf = useCallback(async () => {
+    try {
+      if (newSessionStep === 'upload' && pdfFile) {
+        await uploadPdf(pdfFile)
+        await createSession({
+          source: 'pdf',
+          fileMeta: { name: pdfFile.name },
+        })
+      } else if (newSessionStep === 'paper') {
+        await createSession({
+          source: 'paper',
+          paperQuery: paperQuery.trim(),
+        })
+      }
+      const list = await listSessions()
+      setWorkspaceSessions(list)
+    } catch {
+      /* ignore */
+    }
     closeNewSessionModal()
     setActiveSessionId(null)
     setMainPanel('discover')
-  }, [closeNewSessionModal])
+  }, [
+    closeNewSessionModal,
+    newSessionStep,
+    paperQuery,
+    pdfFile,
+  ])
+
+  useEffect(() => {
+    if (newSessionStep !== 'paper' || !newSessionOpen) {
+      setPaperHits([])
+      return
+    }
+    const q = paperQuery.trim()
+    if (!q) {
+      setPaperHits([])
+      setPaperSearchLoading(false)
+      return
+    }
+    let cancelled = false
+    const t = window.setTimeout(() => {
+      setPaperSearchLoading(true)
+      void searchPapers(q).then((hits) => {
+        if (!cancelled) {
+          setPaperHits(hits)
+          setPaperSearchLoading(false)
+        }
+      })
+    }, 280)
+    return () => {
+      cancelled = true
+      window.clearTimeout(t)
+    }
+  }, [newSessionOpen, newSessionStep, paperQuery])
 
   const prioritizedFeed = useMemo(() => {
-    const session = activeSessionId
-      ? sessions.find((s) => s.id === activeSessionId)
-      : undefined
-
-    if (session) {
-      return [...session.papers]
+    if (activeSessionId) {
+      const session = workspaceSessions.find((s) => s.id === activeSessionId)
+      return session ? [...session.papers] : []
     }
-
+    if (discoveryFeedItems.length > 0) {
+      return [...discoveryFeedItems]
+    }
     const scored = feedItems.map((item) => {
       const match = item.interestIds.some((id) => selected.has(id))
       return { item, match }
@@ -254,18 +478,19 @@ export default function DiscoverPage() {
     return scored
       .sort((a, b) => Number(b.match) - Number(a.match))
       .map((s) => s.item)
-  }, [selected, activeSessionId])
+  }, [activeSessionId, workspaceSessions, discoveryFeedItems, selected])
 
   const relatedPaperPool = useMemo(() => {
-    const byId = new Map<string, (typeof feedItems)[number]>()
+    const byId = new Map<string, FeedItem>()
     for (const p of feedItems) byId.set(p.id, p)
-    for (const s of sessions) {
+    for (const p of discoveryFeedItems) byId.set(p.id, p)
+    for (const s of workspaceSessions) {
       for (const p of s.papers) {
         byId.set(p.id, p)
       }
     }
     return [...byId.values()]
-  }, [])
+  }, [discoveryFeedItems, workspaceSessions])
 
   const feedWithPromos = useMemo(() => {
     const selectedKey = [...selected].sort().join(',')
@@ -420,7 +645,7 @@ export default function DiscoverPage() {
               <button
                 type="button"
                 disabled={selected.size === 0}
-                onClick={handleContinue}
+                onClick={() => void handleContinue()}
                 className={`${btnPrimary} justify-center px-6 disabled:pointer-events-none disabled:opacity-40`}
               >
                 Continue
@@ -662,6 +887,8 @@ export default function DiscoverPage() {
                   setNewSessionStep('choose')
                   setPaperQuery('')
                   setPdfLabel(null)
+                  setPdfFile(null)
+                  setPaperHits([])
                   const el = pdfInputRef.current
                   if (el) el.value = ''
                 }}
@@ -774,10 +1001,30 @@ export default function DiscoverPage() {
                     />
                   </div>
                 </label>
+                {paperSearchLoading ? (
+                  <p className="m-0 text-xs text-slate-500">Searching…</p>
+                ) : null}
+                {paperHits.length > 0 ? (
+                  <ul className="m-0 max-h-40 list-none space-y-1.5 overflow-y-auto p-0 [scrollbar-width:thin]">
+                    {paperHits.map((h) => (
+                      <li
+                        key={h.id}
+                        className="rounded-lg border border-slate-200/80 bg-slate-50/80 px-3 py-2 text-left"
+                      >
+                        <p className="m-0 text-xs font-semibold text-slate-900 line-clamp-2">
+                          {h.title}
+                        </p>
+                        <p className="mt-0.5 mb-0 text-[0.65rem] text-slate-500 line-clamp-1">
+                          {h.authorLine} · {h.meta}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 <button
                   type="button"
                   disabled={!paperQuery.trim()}
-                  onClick={finishNewSessionFromPaperOrPdf}
+                  onClick={() => void finishNewSessionFromPaperOrPdf()}
                   className={`${btnPrimary} w-full justify-center py-2.5 disabled:pointer-events-none disabled:opacity-40`}
                 >
                   Start session
@@ -796,6 +1043,7 @@ export default function DiscoverPage() {
                   onChange={(e) => {
                     const f = e.target.files?.[0]
                     setPdfLabel(f ? f.name : null)
+                    setPdfFile(f && f.size > 0 ? f : null)
                   }}
                 />
                 <label
@@ -806,6 +1054,7 @@ export default function DiscoverPage() {
                     const f = e.dataTransfer.files[0]
                     if (f?.type === 'application/pdf' || f?.name.toLowerCase().endsWith('.pdf')) {
                       setPdfLabel(f.name)
+                      setPdfFile(f)
                     }
                   }}
                   className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300/90 bg-slate-50/60 px-4 py-10 text-center transition-colors hover:border-violet-300 hover:bg-violet-50/30"
@@ -815,13 +1064,13 @@ export default function DiscoverPage() {
                     Choose PDF or drop file here
                   </span>
                   <span className="mt-1 text-xs text-slate-500">
-                    {pdfLabel ?? 'PDF only · processed locally in this demo'}
+                    {pdfLabel ?? 'PDF only · upload is sent to the API (mocked until backend is live)'}
                   </span>
                 </label>
                 <button
                   type="button"
-                  disabled={!pdfLabel}
-                  onClick={finishNewSessionFromPaperOrPdf}
+                  disabled={!pdfLabel || !pdfFile}
+                  onClick={() => void finishNewSessionFromPaperOrPdf()}
                   className={`${btnPrimary} w-full justify-center py-2.5 disabled:pointer-events-none disabled:opacity-40`}
                 >
                   Start session
@@ -985,6 +1234,8 @@ export default function DiscoverPage() {
                     setNewSessionStep('choose')
                     setPaperQuery('')
                     setPdfLabel(null)
+                    setPdfFile(null)
+                    setPaperHits([])
                     const el = pdfInputRef.current
                     if (el) el.value = ''
                   }}
@@ -994,7 +1245,12 @@ export default function DiscoverPage() {
                   New session
                 </button>
                 <ul className="m-0 flex min-h-0 list-none flex-col gap-0.5 overflow-y-auto p-0 [scrollbar-width:thin]">
-                  {sessions.map((s) => {
+                  {sessionsLoading ? (
+                    <li className="px-3 py-2 text-xs text-slate-500">
+                      Loading sessions…
+                    </li>
+                  ) : null}
+                  {workspaceSessions.map((s) => {
                     const isActive =
                       activeSessionId === s.id && mainPanel === 'feed'
                     return (
@@ -1002,6 +1258,7 @@ export default function DiscoverPage() {
                         <button
                           type="button"
                           onClick={() => {
+                            void joinSession(s.id)
                             setMainPanel('feed')
                             setActiveSessionId(s.id)
                           }}
@@ -1051,9 +1308,9 @@ export default function DiscoverPage() {
                   onClick={() => setAccountMenuOpen((o) => !o)}
                   className="flex w-full items-center gap-2.5 rounded-xl border border-slate-200/90 bg-white/95 px-2.5 py-2 text-left shadow-md shadow-slate-300/25 ring-1 ring-white/80 transition-colors outline-none hover:bg-white focus-visible:ring-2 focus-visible:ring-violet-400/50"
                 >
-                  {authUser?.photoURL ? (
+                  {supabaseAvatarUrl(authUser) ? (
                     <img
-                      src={authUser.photoURL}
+                      src={supabaseAvatarUrl(authUser)}
                       alt=""
                       className="size-8 shrink-0 rounded-full object-cover shadow-sm"
                       referrerPolicy="no-referrer"
@@ -1064,12 +1321,12 @@ export default function DiscoverPage() {
                       aria-hidden
                     >
                       {authUser
-                        ? accountInitials(authUser)
+                        ? supabaseAccountInitials(authUser)
                         : demoProfile.initials}
                     </span>
                   )}
                   <span className="min-w-0 flex-1 truncate text-[0.8125rem] font-semibold text-slate-800">
-                    {authUser?.displayName?.trim() ||
+                    {supabaseDisplayName(authUser)?.trim() ||
                       authUser?.email?.split('@')[0] ||
                       `@${demoProfile.username}`}
                   </span>
@@ -1100,21 +1357,34 @@ export default function DiscoverPage() {
                 />
                 <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
                   {mainPanel === 'feed' || mainPanel === 'discover' ? (
-                    <DiscoverFeedReel
-                      feedWithPromos={feedWithPromos}
-                      selected={selected}
-                      likedPosts={likedPosts}
-                      togglePostLike={togglePostLike}
-                      displayedLikeCount={displayedLikeCount}
-                      displayedCommentCount={displayedCommentCount}
-                      commentsOpenPostId={commentsOpenPostId}
-                      toggleCommentsOpen={toggleCommentsOpen}
-                      commentDraftByPost={commentDraftByPost}
-                      setCommentDraftByPost={setCommentDraftByPost}
-                      commentExtras={commentExtras}
-                      submitComment={submitComment}
-                      handleCardMainClick={handleCardMainClick}
-                    />
+                    <div className="relative flex min-h-0 flex-1 flex-col">
+                      {feedLoading ? (
+                        <div
+                          className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-slate-100/60 backdrop-blur-[2px]"
+                          role="status"
+                          aria-live="polite"
+                        >
+                          <span className="text-sm font-medium text-slate-600">
+                            Updating feed…
+                          </span>
+                        </div>
+                      ) : null}
+                      <DiscoverFeedReel
+                        feedWithPromos={feedWithPromos}
+                        selected={selected}
+                        likedPosts={likedPosts}
+                        togglePostLike={togglePostLike}
+                        displayedLikeCount={displayedLikeCount}
+                        displayedCommentCount={displayedCommentCount}
+                        commentsOpenPostId={commentsOpenPostId}
+                        toggleCommentsOpen={toggleCommentsOpen}
+                        commentDraftByPost={commentDraftByPost}
+                        setCommentDraftByPost={setCommentDraftByPost}
+                        commentExtras={commentExtras}
+                        submitComment={submitComment}
+                        handleCardMainClick={handleCardMainClick}
+                      />
+                    </div>
                   ) : null}
 
                   {mainPanel === 'authors' ? <DiscoverAuthorsPanel /> : null}

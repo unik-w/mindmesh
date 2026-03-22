@@ -1,0 +1,330 @@
+import {
+  authorSearchPreview,
+  demoSponsoredResearches,
+  feedItems,
+  popularAuthorsWidget,
+  sessions as seedSessions,
+} from '../pages/discover/data'
+import type { FeedItem } from '../pages/discover/types'
+import type {
+  AuthorSearchHit,
+  CardComment,
+  CreateSessionInput,
+  CreateSessionResult,
+  LikeResult,
+  PaperSearchHit,
+  PdfUploadResult,
+  SessionSummary,
+  SponsorResearch,
+} from './types'
+
+const STORAGE_KEY = 'mindmesh_api_mock_v1'
+
+type Persisted = {
+  interestIds: string[]
+  sessions: SessionSummary[]
+  userLiked: Record<string, boolean>
+  commentsByCard: Record<string, CardComment[]>
+  joinedSessionIds: string[]
+  nextSessionKey: number
+}
+
+function cloneItem(item: FeedItem): FeedItem {
+  return {
+    ...item,
+    interestIds: [...item.interestIds],
+    stats: { ...item.stats },
+    tags: [...item.tags] as [string, string],
+  }
+}
+
+function cloneSession(s: SessionSummary): SessionSummary {
+  return {
+    id: s.id,
+    title: s.title,
+    meta: s.meta,
+    papers: s.papers.map(cloneItem),
+  }
+}
+
+function seedState(): Persisted {
+  return {
+    interestIds: [],
+    sessions: seedSessions.map((s) => cloneSession(s as SessionSummary)),
+    userLiked: {},
+    commentsByCard: {},
+    joinedSessionIds: [],
+    nextSessionKey: 1,
+  }
+}
+
+function loadPersisted(): Persisted {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return seedState()
+    const parsed = JSON.parse(raw) as Partial<Persisted>
+    const base = seedState()
+    return {
+      interestIds: Array.isArray(parsed.interestIds)
+        ? parsed.interestIds
+        : base.interestIds,
+      sessions: Array.isArray(parsed.sessions) && parsed.sessions.length > 0
+        ? parsed.sessions.map((s) => cloneSession(s as SessionSummary))
+        : base.sessions,
+      userLiked:
+        parsed.userLiked && typeof parsed.userLiked === 'object'
+          ? parsed.userLiked
+          : {},
+      commentsByCard:
+        parsed.commentsByCard && typeof parsed.commentsByCard === 'object'
+          ? parsed.commentsByCard
+          : {},
+      joinedSessionIds: Array.isArray(parsed.joinedSessionIds)
+        ? parsed.joinedSessionIds
+        : [],
+      nextSessionKey:
+        typeof parsed.nextSessionKey === 'number'
+          ? parsed.nextSessionKey
+          : base.nextSessionKey,
+    }
+  } catch {
+    return seedState()
+  }
+}
+
+let mem = loadPersisted()
+
+function persist() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(mem))
+  } catch {
+    /* ignore */
+  }
+}
+
+export function mockResetForTests() {
+  mem = seedState()
+  persist()
+}
+
+function findRawFeedItem(id: string): FeedItem | undefined {
+  for (const p of feedItems) {
+    if (p.id === id) return p
+  }
+  for (const s of mem.sessions) {
+    for (const p of s.papers) {
+      if (p.id === id) return p
+    }
+  }
+  return undefined
+}
+
+function allFeedItemsPool(): FeedItem[] {
+  const byId = new Map<string, FeedItem>()
+  for (const p of feedItems) byId.set(p.id, p)
+  for (const s of mem.sessions) {
+    for (const p of s.papers) byId.set(p.id, p)
+  }
+  return [...byId.values()]
+}
+
+function applyOverlays(item: FeedItem): FeedItem {
+  const liked = mem.userLiked[item.id] ?? false
+  const extra = mem.commentsByCard[item.id]?.length ?? 0
+  return {
+    ...item,
+    likes: item.likes + (liked ? 1 : 0),
+    comments: item.comments + extra,
+  }
+}
+
+function searchPapersInternal(query: string): PaperSearchHit[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return []
+  const pool = allFeedItemsPool()
+  return pool
+    .filter(
+      (p) =>
+        p.title.toLowerCase().includes(q) ||
+        p.authorLine.toLowerCase().includes(q) ||
+        p.meta.toLowerCase().includes(q),
+    )
+    .slice(0, 12)
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      authorLine: p.authorLine,
+      meta: p.meta,
+    }))
+}
+
+export const mockStore = {
+  getInterests(): string[] {
+    return [...mem.interestIds]
+  },
+
+  setInterests(ids: string[]) {
+    mem.interestIds = [...ids]
+    persist()
+  },
+
+  getDiscoveryFeed(interestIds: string[]): FeedItem[] {
+    const selected = new Set(interestIds)
+    const scored = feedItems.map((item) => {
+      const match = item.interestIds.some((id) => selected.has(id))
+      return { item: cloneItem(item), match }
+    })
+    return scored
+      .sort((a, b) => Number(b.match) - Number(a.match))
+      .map((s) => applyOverlays(s.item))
+  },
+
+  listSessions(): SessionSummary[] {
+    return mem.sessions.map((s) => ({
+      ...s,
+      papers: s.papers.map((p) => applyOverlays(cloneItem(p))),
+    }))
+  },
+
+  getSessionFeed(sessionId: string): FeedItem[] | null {
+    const s = mem.sessions.find((x) => x.id === sessionId)
+    if (!s) return null
+    return s.papers.map((p) => applyOverlays(cloneItem(p)))
+  },
+
+  joinSession(sessionId: string) {
+    if (!mem.sessions.some((s) => s.id === sessionId)) return
+    if (!mem.joinedSessionIds.includes(sessionId)) {
+      mem.joinedSessionIds.push(sessionId)
+      persist()
+    }
+  },
+
+  setCardLike(cardId: string, liked: boolean): LikeResult {
+    if (liked) mem.userLiked[cardId] = true
+    else delete mem.userLiked[cardId]
+    persist()
+    const raw = findRawFeedItem(cardId)
+    const base = raw?.likes ?? 0
+    const total = base + (mem.userLiked[cardId] ? 1 : 0)
+    return { cardId, liked: Boolean(mem.userLiked[cardId]), likes: total }
+  },
+
+  addCardComment(
+    cardId: string,
+    body: string,
+    author: string,
+  ): CardComment {
+    const id = `${cardId}-c-${Date.now()}`
+    const row: CardComment = { id, author, body }
+    mem.commentsByCard[cardId] = [...(mem.commentsByCard[cardId] ?? []), row]
+    persist()
+    return row
+  },
+
+  getCardComments(cardId: string): CardComment[] {
+    return [...(mem.commentsByCard[cardId] ?? [])]
+  },
+
+  searchPapers(query: string): PaperSearchHit[] {
+    return searchPapersInternal(query)
+  },
+
+  searchAuthors(query: string): AuthorSearchHit[] {
+    const q = query.trim().toLowerCase()
+    const combined: AuthorSearchHit[] = [
+      ...popularAuthorsWidget.map((a) => ({
+        name: a.name,
+        affiliation: 'MindMesh graph',
+      })),
+      ...authorSearchPreview.map((a) => ({
+        name: a.name,
+        affiliation: a.affiliation,
+      })),
+    ]
+    if (!q) return combined
+    return combined.filter(
+      (a) =>
+        a.name.toLowerCase().includes(q) ||
+        a.affiliation.toLowerCase().includes(q),
+    )
+  },
+
+  createSession(input: CreateSessionInput): CreateSessionResult {
+    const n = mem.nextSessionKey++
+    const id = `session-${n}`
+    let papers: FeedItem[]
+    let title: string
+    let meta: string
+
+    if (input.source === 'paper') {
+      const q = (input.paperQuery ?? '').trim()
+      const hits = searchPapersInternal(q)
+      const pool = allFeedItemsPool()
+      const pick =
+        hits.length > 0
+          ? pool.find((p) => p.id === hits[0]!.id)
+          : feedItems[0]
+      const base = pick ? cloneItem(pick) : cloneItem(feedItems[0]!)
+      papers = [
+        {
+          ...base,
+          id: `${id}-p1`,
+          title: q
+            ? `${base.title} · “${q.slice(0, 40)}${q.length > 40 ? '…' : ''}”`
+            : base.title,
+        },
+        ...feedItems.slice(1, 4).map((p, i) => ({
+          ...cloneItem(p),
+          id: `${id}-seed-${i}`,
+        })),
+      ]
+      title =
+        input.title?.trim() ||
+        (q
+          ? `Session · ${q.slice(0, 32)}${q.length > 32 ? '…' : ''}`
+          : 'New paper session')
+      meta = 'You · just now'
+    } else {
+      const name = input.fileMeta?.name ?? 'upload.pdf'
+      papers = feedItems.slice(0, 4).map((p, i) => ({
+        ...cloneItem(p),
+        id: `${id}-pdf-${i}`,
+        title: i === 0 ? `PDF: ${name}` : p.title,
+      }))
+      title =
+        input.title?.trim() ||
+        `PDF · ${name.replace(/\.pdf$/i, '').slice(0, 36)}`
+      meta = 'You · uploaded'
+    }
+
+    const session: SessionSummary = { id, title, meta, papers }
+    mem.sessions = [session, ...mem.sessions]
+    persist()
+    return { session: cloneSession(session) }
+  },
+
+  uploadPdf(file: File): PdfUploadResult {
+    return {
+      documentId: `doc-${Date.now()}`,
+      status: 'processing',
+      fileName: file.name,
+    }
+  },
+
+  getSponsoredResearches(): SponsorResearch[] {
+    return demoSponsoredResearches.map((r) => ({ ...r }))
+  },
+
+  exportUserLikes(): Record<string, boolean> {
+    return { ...mem.userLiked }
+  },
+
+  exportCommentsByCard(): Record<string, CardComment[]> {
+    const out: Record<string, CardComment[]> = {}
+    for (const k of Object.keys(mem.commentsByCard)) {
+      out[k] = [...(mem.commentsByCard[k] ?? [])]
+    }
+    return out
+  },
+}

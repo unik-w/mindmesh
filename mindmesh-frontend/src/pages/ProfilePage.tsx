@@ -1,23 +1,26 @@
+import type { User } from '@supabase/supabase-js'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { onAuthStateChanged, signOut, type User } from 'firebase/auth'
 import { Link, useNavigate } from 'react-router-dom'
-import { SiteShell } from '../components/SiteShell'
-import { auth } from '../firebase'
 import {
-  demoProfile,
-  demoSponsoredResearches,
-} from './discover/data'
+  getProfile,
+  getSponsoredResearches,
+  setApiBearerToken,
+  syncAuthToken,
+  updateProfile,
+} from '../api'
+import type { SponsorResearch, UserProfile } from '../api/types'
+import { SiteShell } from '../components/SiteShell'
+import {
+  supabaseAccountInitials,
+  supabaseAvatarUrl,
+} from '../auth/supabaseUser'
+import { supabase } from '../supabaseClient'
+import { demoProfile } from './discover/data'
 import { btnBase, btnPrimary, wrap } from '../uiClasses'
 
 const STORAGE_KEY = 'mindmesh_profile_v1'
 
-type StoredProfile = {
-  fullName: string
-  email: string
-  affiliation: string
-  bio: string
-  googleScholarUrl: string | null
-}
+type StoredProfile = UserProfile
 
 const defaultStored = (): StoredProfile => ({
   fullName: demoProfile.fullName,
@@ -42,6 +45,14 @@ function saveStored(data: StoredProfile) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
 }
 
+function mergeProfileFromAuth(
+  p: UserProfile,
+  user: User | null,
+): StoredProfile {
+  const email = user?.email?.trim() || p.email || demoProfile.email
+  return { ...p, email }
+}
+
 function isLikelyScholarUrl(s: string) {
   const t = s.trim()
   if (!t) return false
@@ -55,16 +66,7 @@ function isLikelyScholarUrl(s: string) {
 
 function profileInitials(user: User | null, fallback: string): string {
   if (!user) return fallback.slice(0, 2).toUpperCase()
-  const name = user.displayName?.trim()
-  if (name) {
-    const parts = name.split(/\s+/).filter(Boolean)
-    if (parts.length >= 2) {
-      return `${parts[0]![0]!}${parts[parts.length - 1]![0]!}`.toUpperCase()
-    }
-    return name.slice(0, 2).toUpperCase()
-  }
-  const local = user.email?.split('@')[0] ?? '?'
-  return local.slice(0, 2).toUpperCase()
+  return supabaseAccountInitials(user)
 }
 
 export default function ProfilePage() {
@@ -74,10 +76,49 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<StoredProfile>(() => loadStored())
   const [scholarInput, setScholarInput] = useState('')
+  const [sponsors, setSponsors] = useState<SponsorResearch[]>([])
 
   useEffect(() => {
-    return onAuthStateChanged(auth, setAuthUser)
+    if (!supabase) {
+      setAuthUser(null)
+      return
+    }
+
+    let cancelled = false
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setAuthUser(session?.user ?? null)
+      if (cancelled) return
+      if (session?.access_token) {
+        void syncAuthToken(session.access_token)
+      } else {
+        setApiBearerToken(null)
+      }
+    })
+
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
   }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    void getProfile().then((p) => {
+      if (cancelled) return
+      const next = mergeProfileFromAuth(p, authUser)
+      setStored(next)
+      saveStored(next)
+    })
+    void getSponsoredResearches().then((list) => {
+      if (!cancelled) setSponsors(list)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [authUser])
 
   useEffect(() => {
     setDraft(stored)
@@ -86,13 +127,25 @@ export default function ProfilePage() {
   const accountEmail =
     authUser?.email?.trim() || stored.email || demoProfile.email
 
-  const persist = useCallback((next: StoredProfile) => {
-    setStored(next)
-    saveStored(next)
-  }, [])
+  const persist = useCallback(
+    async (next: StoredProfile) => {
+      const email = authUser?.email?.trim() || next.email
+      const saved = await updateProfile({
+        fullName: next.fullName,
+        email,
+        affiliation: next.affiliation,
+        bio: next.bio,
+        googleScholarUrl: next.googleScholarUrl,
+      })
+      const merged = mergeProfileFromAuth(saved, authUser)
+      setStored(merged)
+      saveStored(merged)
+    },
+    [authUser],
+  )
 
   const handleSaveProfile = () => {
-    persist({
+    void persist({
       ...draft,
       email: authUser?.email?.trim() || draft.email,
     })
@@ -108,18 +161,19 @@ export default function ProfilePage() {
     const url = scholarInput.trim()
     if (!isLikelyScholarUrl(url)) return
     const normalized = url.startsWith('http') ? url : `https://${url}`
-    persist({ ...stored, googleScholarUrl: normalized })
+    void persist({ ...stored, googleScholarUrl: normalized })
     setScholarInput('')
   }
 
   const handleDisconnectScholar = () => {
-    persist({ ...stored, googleScholarUrl: null })
+    void persist({ ...stored, googleScholarUrl: null })
   }
 
   const handleLogout = async () => {
+    setApiBearerToken(null)
     localStorage.removeItem(STORAGE_KEY)
     try {
-      await signOut(auth)
+      if (supabase) await supabase.auth.signOut()
     } catch {
       /* ignore */
     }
@@ -189,9 +243,9 @@ export default function ProfilePage() {
           <section className="mb-6 rounded-2xl border border-border bg-white p-6 shadow-sm shadow-slate-200/40">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div className="flex min-w-0 items-center gap-4">
-                {authUser?.photoURL ? (
+                {supabaseAvatarUrl(authUser) ? (
                   <img
-                    src={authUser.photoURL}
+                    src={supabaseAvatarUrl(authUser)}
                     alt=""
                     className="size-14 shrink-0 rounded-2xl object-cover shadow-md"
                     referrerPolicy="no-referrer"
@@ -379,7 +433,7 @@ export default function ProfilePage() {
               visibility on MindMesh.
             </p>
             <ul className="m-0 mt-5 list-none space-y-3 p-0">
-              {demoSponsoredResearches.map((r) => (
+              {sponsors.map((r) => (
                 <li
                   key={r.id}
                   className="rounded-xl border border-slate-200/90 bg-slate-50/60 px-4 py-3.5"
