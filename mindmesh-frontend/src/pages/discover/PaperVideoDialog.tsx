@@ -113,7 +113,7 @@ export function PaperVideoDialog({ post, onClose }: PaperVideoDialogProps) {
         })
         roomRef.current = room
 
-        room.on(RoomEvent.TrackSubscribed, (track) => {
+        room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack) => {
           attachRemoteTrack(
             track,
             videoRef.current,
