@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom'
-import { btnPrimary, wrap } from '../uiClasses'
+import { Link } from "react-router-dom";
+import { btnPrimary, wrap } from "../uiClasses";
 
 export function SiteShell({ children }: { children: React.ReactNode }) {
   return (
@@ -10,16 +10,14 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
       />
 
       <header className="sticky top-0 z-20 h-16 shrink-0 border-b border-border/80 bg-[color-mix(in_srgb,var(--color-canvas)_85%,white)] backdrop-blur-md">
-        <div className={`${wrap} flex h-full items-center justify-between gap-4`}>
+        <div
+          className={`${wrap} flex h-full items-center justify-between gap-4`}
+        >
           <Link
             className="flex shrink-0 items-center no-underline transition-opacity hover:opacity-90"
             to="/"
           >
-            <img
-              src="/mindmesh-logo.png"
-              alt="MindMesh"
-              className="h-18 "
-            />
+            <img src="/mindmesh-logo.png" alt="MindMesh" className="h-18 " />
           </Link>
           <Link
             className={`${btnPrimary} max-[480px]:hidden px-4`}
@@ -39,11 +37,7 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
           className={`${wrap} flex flex-wrap items-center justify-between gap-4`}
         >
           <Link to="/" className="no-underline">
-            <img
-              src="/mindmesh-logo.png"
-              alt="MindMesh"
-              className="h-18 "
-            />
+            <img src="/mindmesh-logo.png" alt="MindMesh" className="h-18 " />
           </Link>
           <p className="m-0 text-[0.82rem] text-muted">
             © {new Date().getFullYear()} · Research discovery, connected
@@ -51,5 +45,5 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
         </div>
       </footer>
     </div>
-  )
+  );
 }

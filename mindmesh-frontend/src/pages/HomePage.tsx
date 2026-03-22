@@ -22,12 +22,12 @@ const pillars: {
 }[] = [
   {
     title: 'AI that learns you',
-    body: 'Recommendations sharpen from every paper you open, save, and skip—no manual tuning, just a feed that gets sharper as you scroll.',
+    body: 'Recommendations sharpen from every paper you open, save, and skip no manual tuning, just a feed that gets sharper as you scroll.',
     highlight: true,
   },
   {
     title: 'Social, not siloed',
-    body: 'Follow authors, topics, and projects—discussion lives next to the work.',
+    body: 'Follow authors, topics, and projects discussion lives next to the work.',
   },
   {
     title: 'One home base',
@@ -38,7 +38,7 @@ const pillars: {
 const features = [
   {
     title: 'A feed that stays relevant',
-    desc: 'New papers and trending work in your field—plus nearby conference cards and curated roles matched to your interests—without the endless query loop.',
+    desc: 'New papers and trending work in your field plus nearby conference cards and curated roles matched to your interests without the endless query loop.',
   },
   {
     title: 'A graph for your domain',
@@ -86,7 +86,7 @@ export default function HomePage() {
                 <span className="block text-[clamp(2.1rem,5vw,2.95rem)] leading-[1.06] font-bold tracking-[-0.038em]">
                   We&apos;re making research{' '}
                   <span className={gradientText}>addictive</span>
-                  <span className="text-heading">—one scroll at a time.</span>
+                  <span className="text-heading"> one scroll at a time.</span>
                 </span>
                 <span className="mt-4 block border-l-2 border-cyan-500/35 pl-4 text-[clamp(1.3rem,2.2vw,1.35rem)] leading-[1.15] font-bold tracking-[-0.028em] text-slate-700">
                   Less searching.{' '}
@@ -98,7 +98,7 @@ export default function HomePage() {
                 aria-hidden
               />
               <p className="mb-3 mt-0 text-[1.0625rem] leading-[1.62] text-foreground">
-                Meet like-minded researchers in your lane—then keep the momentum
+                Meet like-minded researchers in your lane then keep the momentum
                 in one feed built for how you actually read.
               </p>
               <p className="mb-7 mt-0 text-[1.0625rem] leading-[1.62] text-foreground">
@@ -107,7 +107,7 @@ export default function HomePage() {
                 <span className={`font-semibold ${gradientText}`}>
                   AI that learns you
                 </span>{' '}
-                from every open, save, and skip—so the next scroll feels
+                from every open, save, and skip so the next scroll feels
                 personal.
               </p>
               <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
@@ -209,7 +209,7 @@ export default function HomePage() {
                 Everything in one flow
               </h2>
               <p className="m-0 text-[0.98rem] leading-[1.55] text-foreground">
-                Like a social layer for papers—plus an assistant that learns your
+                Like a social layer for papers plus an assistant that learns your
                 domain and your habits, with curated events and roles when they
                 match where you are.
               </p>
@@ -307,7 +307,7 @@ export default function HomePage() {
                 Ready when you are
               </h2>
               <p className="mb-[22px] mt-0 text-[0.95rem] leading-[1.55] text-foreground">
-                Tell us what you work on—we&apos;ll use it to personalize your
+                Tell us what you work on we&apos;ll use it to personalize your
                 feed and recommendations. Optional: add your email for launch
                 updates.
               </p>
