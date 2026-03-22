@@ -47,7 +47,6 @@ import { ArxivSearchPanel } from './discover/ArxivSearchPanel'
 import { DiscoverAuthorsPanel } from './discover/DiscoverAuthorsPanel'
 import { DiscoverFeedReel } from './discover/DiscoverFeedReel'
 import { stopElevenLabsPlayback } from './discover/elevenlabsTts'
-import { PaperVideoButton } from './discover/PaperVideoButton'
 
 const PaperVideoDialog = lazy(() =>
   import('./discover/PaperVideoDialog').then((m) => ({
@@ -109,6 +108,9 @@ export default function DiscoverPage() {
     Record<string, { id: string; author: string; body: string }[]>
   >({})
   const [paperSheetPost, setPaperSheetPost] = useState<FeedItem | null>(null)
+  const [videoDialogPost, setVideoDialogPost] = useState<FeedItem | null>(null)
+  const [pdfAnalysis, setPdfAnalysis] = useState<PdfAnalysisResult | null>(null)
+  const [pdfAnalysisLoading, setPdfAnalysisLoading] = useState(false)
 
   const [workspaceSessions, setWorkspaceSessions] = useState<SessionSummary[]>(
     [],
