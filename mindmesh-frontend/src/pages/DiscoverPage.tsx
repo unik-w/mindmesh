@@ -1183,8 +1183,8 @@ export default function DiscoverPage() {
               id="new-session-desc"
               className="mt-2 text-[0.875rem] leading-relaxed text-muted"
             >
-              Name your session, then search arXiv from the session workspace—same
-              as Search arXiv, with likes scoped to this session.
+              Name your session. A session is a separate workspace tailored to
+              a specific topic or search flow.
             </p>
           </div>
 
