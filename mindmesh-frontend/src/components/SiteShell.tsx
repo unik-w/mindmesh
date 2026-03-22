@@ -17,7 +17,7 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
             className="flex shrink-0 items-center no-underline transition-opacity hover:opacity-90"
             to="/"
           >
-            <img src="/mindmesh-logo.png" alt="MindMesh" className="h-18 " />
+            <img src="/mindmesh-logo.png" alt="MindMesh" className="h-18 px-4 py-2" />
           </Link>
           <Link
             className={`${btnPrimary} max-[480px]:hidden px-4`}
