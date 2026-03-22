@@ -18,7 +18,8 @@ export type CardComment = {
 export type LikeResult = {
   cardId: string
   liked: boolean
-  likes: number
+  /** Omitted when the API does not return an aggregate like count. */
+  likes?: number
 }
 
 export type CreateSessionInput = {

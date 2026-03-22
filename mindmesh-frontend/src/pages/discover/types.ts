@@ -38,4 +38,4 @@ export type ReelItem =
 
 export type MainPanel = 'feed' | 'discover' | 'authors'
 
-export type NewSessionModalStep = 'choose' | 'paper' | 'upload'
+export type NewSessionModalStep = 'choose' | 'paper'

@@ -1,5 +1,6 @@
 export {
   addCardComment,
+  clearMindMeshApiSession,
   createSession,
   getDiscoveryFeed,
   getProfile,
@@ -10,12 +11,14 @@ export {
   getPersistedComments,
   joinSession,
   listSessions,
+  loginWithGoogleIdToken,
   saveInterests,
   searchAuthors,
   searchPapers,
   setApiBearerToken,
   setCardLike,
   syncAuthToken,
+  syncMindMeshAuth,
   updateProfile,
   uploadPdf,
 } from './api'

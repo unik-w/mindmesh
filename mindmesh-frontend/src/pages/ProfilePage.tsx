@@ -2,10 +2,10 @@ import type { User } from '@supabase/supabase-js'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
+  clearMindMeshApiSession,
   getProfile,
   getSponsoredResearches,
-  setApiBearerToken,
-  syncAuthToken,
+  syncMindMeshAuth,
   updateProfile,
 } from '../api'
 import type { SponsorResearch, UserProfile } from '../api/types'
@@ -91,11 +91,7 @@ export default function ProfilePage() {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setAuthUser(session?.user ?? null)
       if (cancelled) return
-      if (session?.access_token) {
-        void syncAuthToken(session.access_token)
-      } else {
-        setApiBearerToken(null)
-      }
+      void syncMindMeshAuth(session)
     })
 
     return () => {
@@ -170,7 +166,7 @@ export default function ProfilePage() {
   }
 
   const handleLogout = async () => {
-    setApiBearerToken(null)
+    clearMindMeshApiSession()
     localStorage.removeItem(STORAGE_KEY)
     try {
       if (supabase) await supabase.auth.signOut()

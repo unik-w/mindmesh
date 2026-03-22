@@ -1,20 +1,17 @@
-const ROUTES = {
-  authToken: '/v1/auth/token',
-  interests: '/v1/users/me/interests',
-  discoveryFeed: '/v1/discovery/feed',
-  sessions: '/v1/sessions',
-  sessionFeed: (id: string) => `/v1/sessions/${encodeURIComponent(id)}/feed`,
-  joinSession: (id: string) => `/v1/sessions/${encodeURIComponent(id)}/join`,
-  cardLike: (id: string) => `/v1/cards/${encodeURIComponent(id)}/like`,
-  cardComments: (id: string) => `/v1/cards/${encodeURIComponent(id)}/comments`,
-  profile: '/v1/users/me/profile',
-  sponsors: '/v1/sponsors/researches',
-  searchPapers: '/v1/search/papers',
-  searchAuthors: '/v1/search/authors',
-  uploadPdf: '/v1/uploads/pdf',
+/** Paths for the MindMesh FastAPI backend (see /docs on the API server). */
+export const ROUTES = {
+  authLogin: '/auth/login',
+  authMe: '/auth/me',
+  userUpdateInterests: '/user/update_interests',
+  userLikes: '/user/likes',
+  userFeed: '/user/feed',
+  userLike: '/user/like',
+  userDislike: '/user/dislike',
+  paperSearch: '/paper/search',
+  paperList: '/paper/list',
+  paperInsert: '/paper/insert',
+  arxivSearch: '/arxiv/search',
 } as const
-
-export { ROUTES }
 
 export function getApiBaseUrl(): string {
   const raw = import.meta.env.VITE_API_BASE_URL
@@ -45,6 +42,20 @@ export class ApiHttpError extends Error {
   }
 }
 
+function messageFromErrorBody(body: unknown, statusText: string): string {
+  if (typeof body === 'object' && body && body !== null) {
+    const o = body as Record<string, unknown>
+    if (typeof o.message === 'string' && o.message.trim()) return o.message
+    const detail = o.detail
+    if (typeof detail === 'string' && detail.trim()) return detail
+    if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0] as { msg?: unknown }
+      if (typeof first?.msg === 'string') return first.msg
+    }
+  }
+  return statusText
+}
+
 async function parseJson(res: Response): Promise<unknown> {
   const text = await res.text()
   if (!text) return null
@@ -53,6 +64,33 @@ async function parseJson(res: Response): Promise<unknown> {
   } catch {
     return text
   }
+}
+
+/** Unauthenticated JSON request (e.g. POST /auth/login). */
+export async function apiFetchJsonPublic<T>(
+  path: string,
+  init: RequestInit & { json?: unknown } = {},
+): Promise<T> {
+  const base = getApiBaseUrl()
+  if (!base) throw new Error('apiFetchJsonPublic called without VITE_API_BASE_URL')
+
+  const { json, headers: hdrs, ...rest } = init
+  const headers = new Headers(hdrs)
+  if (json !== undefined) {
+    headers.set('Content-Type', 'application/json')
+  }
+
+  const res = await fetch(`${base}${path}`, {
+    ...rest,
+    headers,
+    body: json !== undefined ? JSON.stringify(json) : rest.body,
+  })
+
+  const body = await parseJson(res)
+  if (!res.ok) {
+    throw new ApiHttpError(messageFromErrorBody(body, res.statusText), res.status, body)
+  }
+  return body as T
 }
 
 export async function apiFetchJson<T>(
@@ -79,44 +117,12 @@ export async function apiFetchJson<T>(
 
   const body = await parseJson(res)
   if (!res.ok) {
-    throw new ApiHttpError(
-      typeof body === 'object' && body && 'message' in body
-        ? String((body as { message: unknown }).message)
-        : res.statusText,
-      res.status,
-      body,
-    )
+    throw new ApiHttpError(messageFromErrorBody(body, res.statusText), res.status, body)
   }
   return body as T
 }
 
-export async function apiUploadPdf(file: File): Promise<unknown> {
-  const base = getApiBaseUrl()
-  if (!base) throw new Error('apiUploadPdf called without VITE_API_BASE_URL')
-
-  const fd = new FormData()
-  fd.append('file', file, file.name)
-
-  const headers = new Headers()
-  if (bearerToken) {
-    headers.set('Authorization', `Bearer ${bearerToken}`)
-  }
-
-  const res = await fetch(`${base}${ROUTES.uploadPdf}`, {
-    method: 'POST',
-    headers,
-    body: fd,
-  })
-
-  const body = await parseJson(res)
-  if (!res.ok) {
-    throw new ApiHttpError(
-      typeof body === 'object' && body && 'message' in body
-        ? String((body as { message: unknown }).message)
-        : res.statusText,
-      res.status,
-      body,
-    )
-  }
-  return body
+export async function apiUploadPdf(_file: File): Promise<unknown> {
+  void _file
+  throw new Error('PDF upload is not supported by the current API')
 }

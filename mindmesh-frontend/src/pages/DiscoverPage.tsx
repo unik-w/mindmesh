@@ -11,6 +11,7 @@ import type { User } from '@supabase/supabase-js'
 import { Link } from 'react-router-dom'
 import {
   addCardComment,
+  clearMindMeshApiSession,
   createSession,
   getDiscoveryFeed,
   getPersistedComments,
@@ -20,10 +21,8 @@ import {
   listSessions,
   saveInterests,
   searchPapers,
-  setApiBearerToken,
   setCardLike,
-  syncAuthToken,
-  uploadPdf,
+  syncMindMeshAuth,
 } from '../api'
 import {
   supabaseAccountInitials,
@@ -57,7 +56,6 @@ import {
   IconAuthor,
   IconPaper,
   IconPlus,
-  IconUploadPdf,
   MindMeshWordmark,
   SidebarNavIconDiscover,
   SidebarNavIconSearch,
@@ -76,8 +74,6 @@ export default function DiscoverPage() {
   const [newSessionStep, setNewSessionStep] =
     useState<NewSessionModalStep>('choose')
   const [paperQuery, setPaperQuery] = useState('')
-  const [pdfLabel, setPdfLabel] = useState<string | null>(null)
-  const pdfInputRef = useRef<HTMLInputElement>(null)
   const accountMenuRef = useRef<HTMLDivElement>(null)
   const [accountMenuOpen, setAccountMenuOpen] = useState(false)
 
@@ -99,7 +95,6 @@ export default function DiscoverPage() {
   const [discoveryFeedItems, setDiscoveryFeedItems] = useState<FeedItem[]>([])
   const [feedLoading, setFeedLoading] = useState(false)
   const [sessionsLoading, setSessionsLoading] = useState(false)
-  const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [paperHits, setPaperHits] = useState<PaperSearchHit[]>([])
   const [paperSearchLoading, setPaperSearchLoading] = useState(false)
 
@@ -138,14 +133,26 @@ export default function DiscoverPage() {
           setLikedPosts((p) => ({ ...p, [postId]: res.liked }))
           setDiscoveryFeedItems((items) =>
             items.map((p) =>
-              p.id === postId ? { ...p, likes: res.likes } : p,
+              p.id === postId
+                ? {
+                    ...p,
+                    likes:
+                      res.likes !== undefined ? res.likes : p.likes,
+                  }
+                : p,
             ),
           )
           setWorkspaceSessions((sessions) =>
             sessions.map((s) => ({
               ...s,
               papers: s.papers.map((p) =>
-                p.id === postId ? { ...p, likes: res.likes } : p,
+                p.id === postId
+                  ? {
+                      ...p,
+                      likes:
+                        res.likes !== undefined ? res.likes : p.likes,
+                    }
+                  : p,
               ),
             })),
           )
@@ -255,11 +262,7 @@ export default function DiscoverPage() {
       setAuthUser(session?.user ?? null)
       setAuthReady(true)
       if (cancelled) return
-      if (session?.access_token) {
-        void syncAuthToken(session.access_token)
-      } else {
-        setApiBearerToken(null)
-      }
+      void syncMindMeshAuth(session)
     })
 
     return () => {
@@ -270,7 +273,7 @@ export default function DiscoverPage() {
 
   useEffect(() => {
     if (!authReady || authUser) return
-    setApiBearerToken(null)
+    clearMindMeshApiSession()
     setPhase('interests')
     setSelected(new Set())
     setPaperSheetPost(null)
@@ -371,7 +374,7 @@ export default function DiscoverPage() {
 
   const handleLogout = useCallback(async () => {
     setAccountMenuOpen(false)
-    setApiBearerToken(null)
+    clearMindMeshApiSession()
     try {
       if (supabase) await supabase.auth.signOut()
     } catch {
@@ -400,22 +403,12 @@ export default function DiscoverPage() {
     setNewSessionOpen(false)
     setNewSessionStep('choose')
     setPaperQuery('')
-    setPdfLabel(null)
-    setPdfFile(null)
     setPaperHits([])
-    const el = pdfInputRef.current
-    if (el) el.value = ''
   }, [])
 
-  const finishNewSessionFromPaperOrPdf = useCallback(async () => {
+  const finishNewSessionFromPaper = useCallback(async () => {
     try {
-      if (newSessionStep === 'upload' && pdfFile) {
-        await uploadPdf(pdfFile)
-        await createSession({
-          source: 'pdf',
-          fileMeta: { name: pdfFile.name },
-        })
-      } else if (newSessionStep === 'paper') {
+      if (newSessionStep === 'paper') {
         await createSession({
           source: 'paper',
           paperQuery: paperQuery.trim(),
@@ -429,12 +422,7 @@ export default function DiscoverPage() {
     closeNewSessionModal()
     setActiveSessionId(null)
     setMainPanel('discover')
-  }, [
-    closeNewSessionModal,
-    newSessionStep,
-    paperQuery,
-    pdfFile,
-  ])
+  }, [closeNewSessionModal, newSessionStep, paperQuery])
 
   useEffect(() => {
     if (newSessionStep !== 'paper' || !newSessionOpen) {
@@ -886,11 +874,7 @@ export default function DiscoverPage() {
                 onClick={() => {
                   setNewSessionStep('choose')
                   setPaperQuery('')
-                  setPdfLabel(null)
-                  setPdfFile(null)
                   setPaperHits([])
-                  const el = pdfInputRef.current
-                  if (el) el.value = ''
                 }}
                 className="mb-3 -ml-1 flex items-center gap-1 rounded-lg px-1 py-1 text-[0.8125rem] font-medium text-violet-700 transition-colors hover:bg-violet-50"
               >
@@ -908,9 +892,7 @@ export default function DiscoverPage() {
             >
               {newSessionStep === 'choose'
                 ? 'Start a new session'
-                : newSessionStep === 'paper'
-                  ? 'Start from a paper'
-                  : 'Start from a PDF'}
+                : 'Start from a paper'}
             </h2>
             <p
               id="new-session-desc"
@@ -918,9 +900,7 @@ export default function DiscoverPage() {
             >
               {newSessionStep === 'choose'
                 ? 'Pick how you want to seed your session—we will build a feed and collaborators around it.'
-                : newSessionStep === 'paper'
-                  ? 'Search by title, DOI, arXiv ID, or keywords.'
-                  : 'Upload a PDF to extract metadata and related work (demo: file stays in your browser).'}
+                : 'Search by title, DOI, arXiv ID, or keywords.'}
             </p>
           </div>
 
@@ -962,23 +942,6 @@ export default function DiscoverPage() {
                     </span>
                     <span className="mt-0.5 block text-[0.8125rem] leading-snug text-muted">
                       Open author search and start a session from their graph.
-                    </span>
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setNewSessionStep('upload')}
-                  className="flex w-full items-start gap-3 rounded-xl border border-slate-200/90 bg-white px-3.5 py-3.5 text-left shadow-sm transition-all hover:border-violet-200 hover:bg-slate-50/80 hover:shadow-md focus-visible:ring-2 focus-visible:ring-violet-400/50"
-                >
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-cyan-500/15 to-violet-500/20 text-violet-700">
-                    <IconUploadPdf className="text-violet-700" />
-                  </span>
-                  <span className="min-w-0 pt-0.5">
-                    <span className="block text-[0.9rem] font-semibold text-heading">
-                      Upload a PDF
-                    </span>
-                    <span className="mt-0.5 block text-[0.8125rem] leading-snug text-muted">
-                      Drop a preprint or paper file to bootstrap your session.
                     </span>
                   </span>
                 </button>
@@ -1024,53 +987,7 @@ export default function DiscoverPage() {
                 <button
                   type="button"
                   disabled={!paperQuery.trim()}
-                  onClick={() => void finishNewSessionFromPaperOrPdf()}
-                  className={`${btnPrimary} w-full justify-center py-2.5 disabled:pointer-events-none disabled:opacity-40`}
-                >
-                  Start session
-                </button>
-              </div>
-            ) : null}
-
-            {newSessionStep === 'upload' ? (
-              <div className="flex flex-col gap-4">
-                <input
-                  ref={pdfInputRef}
-                  type="file"
-                  accept="application/pdf,.pdf"
-                  className="sr-only"
-                  id="new-session-pdf"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0]
-                    setPdfLabel(f ? f.name : null)
-                    setPdfFile(f && f.size > 0 ? f : null)
-                  }}
-                />
-                <label
-                  htmlFor="new-session-pdf"
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
-                    e.preventDefault()
-                    const f = e.dataTransfer.files[0]
-                    if (f?.type === 'application/pdf' || f?.name.toLowerCase().endsWith('.pdf')) {
-                      setPdfLabel(f.name)
-                      setPdfFile(f)
-                    }
-                  }}
-                  className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300/90 bg-slate-50/60 px-4 py-10 text-center transition-colors hover:border-violet-300 hover:bg-violet-50/30"
-                >
-                  <IconUploadPdf className="mx-auto text-slate-400" />
-                  <span className="mt-3 text-sm font-semibold text-slate-800">
-                    Choose PDF or drop file here
-                  </span>
-                  <span className="mt-1 text-xs text-slate-500">
-                    {pdfLabel ?? 'PDF only · upload is sent to the API (mocked until backend is live)'}
-                  </span>
-                </label>
-                <button
-                  type="button"
-                  disabled={!pdfLabel || !pdfFile}
-                  onClick={() => void finishNewSessionFromPaperOrPdf()}
+                  onClick={() => void finishNewSessionFromPaper()}
                   className={`${btnPrimary} w-full justify-center py-2.5 disabled:pointer-events-none disabled:opacity-40`}
                 >
                   Start session
@@ -1233,18 +1150,14 @@ export default function DiscoverPage() {
                     setNewSessionOpen(true)
                     setNewSessionStep('choose')
                     setPaperQuery('')
-                    setPdfLabel(null)
-                    setPdfFile(null)
                     setPaperHits([])
-                    const el = pdfInputRef.current
-                    if (el) el.value = ''
                   }}
                   className={`${sidebarNavBtn} ${sidebarNavBtnIdle} mb-1.5 font-medium text-slate-800`}
                 >
                   <IconPlus className="shrink-0 text-violet-600 opacity-90" />
                   New session
                 </button>
-                <ul className="m-0 flex min-h-0 list-none flex-col gap-0.5 overflow-y-auto p-0 [scrollbar-width:thin]">
+                <ul className="m-0 flex min-h-0 list-none flex-col gap-1 overflow-y-auto px-1 py-1 [scrollbar-width:thin]">
                   {sessionsLoading ? (
                     <li className="px-3 py-2 text-xs text-slate-500">
                       Loading sessions…
