@@ -23,6 +23,13 @@ export function arxivAbsUrl(post: FeedItem) {
   return `https://arxiv.org/abs/${arxivIdForPost(post)}`
 }
 
+/** Substance only (no in-app template paragraphs). Used for video agent context. */
+export function paperVideoContextText(post: FeedItem): string {
+  const detail = post.paperDetail?.trim()
+  if (detail) return detail
+  return post.aiSummary?.trim() ?? ''
+}
+
 export function paperDetailText(post: FeedItem) {
   if (post.paperDetail) return post.paperDetail
   return [

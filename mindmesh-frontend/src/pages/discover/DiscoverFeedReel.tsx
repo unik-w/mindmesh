@@ -9,6 +9,7 @@ import { btnPrimary, gradientText } from '../../uiClasses'
 import { formatCount } from './format'
 import type { FeedItem, ReelItem } from './types'
 import { HeartIcon, UserCircleIcon } from './icons'
+import { PaperVideoButton } from './PaperVideoButton'
 import { SummarySpeechButton } from './SummarySpeechButton'
 
 export type DiscoverFeedReelProps = {
@@ -28,6 +29,7 @@ export type DiscoverFeedReelProps = {
     e: ReactMouseEvent<HTMLDivElement>,
     post: FeedItem,
   ) => void
+  onOpenPaperVideo?: (post: FeedItem) => void
   onLoadMore?: () => void
   loadingMore?: boolean
   hasMore?: boolean
@@ -47,6 +49,7 @@ export function DiscoverFeedReel({
   commentExtras,
   submitComment,
   handleCardMainClick,
+  onOpenPaperVideo,
   onLoadMore,
   loadingMore,
   hasMore,
@@ -311,10 +314,17 @@ export function DiscoverFeedReel({
                       >
                         AI summary
                       </p>
-                      <SummarySpeechButton
-                        text={post.aiSummary}
-                        className="-mr-1 -mt-0.5"
-                      />
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        <SummarySpeechButton
+                          text={post.aiSummary}
+                          className="-mr-0.5 -mt-0.5"
+                        />
+                        {onOpenPaperVideo ? (
+                          <PaperVideoButton
+                            onClick={() => onOpenPaperVideo(post)}
+                          />
+                        ) : null}
+                      </div>
                     </div>
                     <div className="mt-2.5 space-y-2.5 text-[0.9rem] leading-[1.58] text-slate-700">
                       {post.aiSummary

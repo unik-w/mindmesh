@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -45,6 +47,13 @@ import { ArxivSearchPanel } from './discover/ArxivSearchPanel'
 import { DiscoverAuthorsPanel } from './discover/DiscoverAuthorsPanel'
 import { DiscoverFeedReel } from './discover/DiscoverFeedReel'
 import { stopElevenLabsPlayback } from './discover/elevenlabsTts'
+import { PaperVideoButton } from './discover/PaperVideoButton'
+
+const PaperVideoDialog = lazy(() =>
+  import('./discover/PaperVideoDialog').then((m) => ({
+    default: m.PaperVideoDialog,
+  })),
+)
 import { SummarySpeechButton } from './discover/SummarySpeechButton'
 import { LikesPanel } from './discover/LikesPanel'
 import { demoProfile, feedItems, INTERESTS } from './discover/data'
@@ -100,8 +109,6 @@ export default function DiscoverPage() {
     Record<string, { id: string; author: string; body: string }[]>
   >({})
   const [paperSheetPost, setPaperSheetPost] = useState<FeedItem | null>(null)
-  const [pdfAnalysis, setPdfAnalysis] = useState<PdfAnalysisResult | null>(null)
-  const [pdfAnalysisLoading, setPdfAnalysisLoading] = useState(false)
 
   const [workspaceSessions, setWorkspaceSessions] = useState<SessionSummary[]>(
     [],
@@ -210,6 +217,10 @@ export default function DiscoverPage() {
   const displayedLikeCount = useCallback((post: FeedItem) => post.likes, [])
 
   const displayedCommentCount = useCallback((post: FeedItem) => post.comments, [])
+
+  const openPaperVideo = useCallback((p: FeedItem) => {
+    setVideoDialogPost(p)
+  }, [])
 
   const toggleCommentsOpen = useCallback((postId: string) => {
     setCommentsOpenPostId((prev) => (prev === postId ? null : postId))
@@ -792,7 +803,7 @@ export default function DiscoverPage() {
                   Detailed explanation
                 </h3>
                 <SummarySpeechButton
-                  text={pdfAnalysis ? pdfAnalysis.description_paragraphs.join('\n\n') : paperDetailText(paperSheetPost)}
+                  text={paperDetailText(paperSheetPost)}
                   className="-mr-1 -mt-0.5 text-slate-600"
                 />
               </div>
@@ -1489,6 +1500,7 @@ export default function DiscoverPage() {
                         commentExtras={commentExtras}
                         submitComment={submitComment}
                         handleCardMainClick={handleCardMainClick}
+                        onOpenPaperVideo={openPaperVideo}
                         onLoadMore={handleLoadMore}
                         loadingMore={feedLoadingMore}
                         hasMore={feedHasMore}
@@ -1511,6 +1523,7 @@ export default function DiscoverPage() {
                       commentExtras={commentExtras}
                       submitComment={submitComment}
                       handleCardMainClick={handleCardMainClick}
+                      onOpenPaperVideo={openPaperVideo}
                     />
                   ) : null}
                   {mainPanel === 'likes' ? (
@@ -1530,6 +1543,15 @@ export default function DiscoverPage() {
         {paperSheetModal
           ? createPortal(paperSheetModal, document.body)
           : null}
+        {videoDialogPost ? (
+          <Suspense fallback={null}>
+            <PaperVideoDialog
+              key={videoDialogPost.id}
+              post={videoDialogPost}
+              onClose={() => setVideoDialogPost(null)}
+            />
+          </Suspense>
+        ) : null}
     </main>
   )
 }

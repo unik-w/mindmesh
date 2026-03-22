@@ -77,6 +77,7 @@ export type ArxivSearchPanelProps = {
     e: ReactMouseEvent<HTMLDivElement>,
     post: FeedItem,
   ) => void
+  onOpenPaperVideo?: (post: FeedItem) => void
 }
 
 export function ArxivSearchPanel({
@@ -92,6 +93,7 @@ export function ArxivSearchPanel({
   commentExtras,
   submitComment,
   handleCardMainClick,
+  onOpenPaperVideo,
 }: ArxivSearchPanelProps) {
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(false)
@@ -334,6 +336,7 @@ export function ArxivSearchPanel({
           commentExtras={commentExtras}
           submitComment={submitComment}
           handleCardMainClick={handleCardMainClick}
+          onOpenPaperVideo={onOpenPaperVideo}
           onLoadMore={handleLoadMore}
           loadingMore={loadingMore}
           hasMore={hasMore}

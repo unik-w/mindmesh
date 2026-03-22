@@ -19,6 +19,7 @@ export function SummarySpeechButton({
   className = '',
 }: SummarySpeechButtonProps) {
   const [busy, setBusy] = useState(false)
+  const [errHint, setErrHint] = useState<string | null>(null)
   const apiKey = import.meta.env.VITE_ELEVENLABS_API_KEY?.trim()
   const voiceId = import.meta.env.VITE_ELEVENLABS_VOICE_ID?.trim()
   const modelId = import.meta.env.VITE_ELEVENLABS_MODEL_ID?.trim()
@@ -32,12 +33,15 @@ export function SummarySpeechButton({
       e.preventDefault()
       if (!apiKey || !plain) return
       setBusy(true)
+      setErrHint(null)
       try {
         await playElevenLabsSpeech(plain, apiKey, {
           voiceId: voiceId || undefined,
           modelId: modelId || undefined,
         })
       } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        setErrHint(msg)
         console.error('ElevenLabs TTS failed:', err)
         stopElevenLabsPlayback()
       } finally {
@@ -49,9 +53,11 @@ export function SummarySpeechButton({
 
   const title = !apiKey
     ? missingKeyHint
-    : busy
-      ? 'Generating audio…'
-      : 'Play summary with ElevenLabs'
+    : errHint
+      ? `TTS failed: ${errHint}`
+      : busy
+        ? 'Generating audio…'
+        : 'Play summary with ElevenLabs'
 
   return (
     <button
