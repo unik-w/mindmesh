@@ -471,23 +471,6 @@ function cachePapers(papers: BackendPaper[]) {
   for (const p of papers) rawPaperCache.set(p.id, p)
 }
 
-function applyLlmSummaries(
-  papers: BackendPaper[],
-  summaries: FeedSummaryItem[],
-): FeedItem[] {
-  const summaryMap = new Map(
-    summaries
-      .filter((s) => s.summary && !s.error)
-      .map((s) => [s.paper_id, s.summary]),
-  )
-  return papers.map((p) => {
-    const item = backendPaperToFeedItem(p)
-    const llm = summaryMap.get(p.id)
-    if (llm) item.aiSummary = llm
-    return item
-  })
-}
-
 export async function getDiscoveryFeed(
   _interestIds: string[],
   onSummaries?: (summaries: FeedSummaryItem[]) => void,

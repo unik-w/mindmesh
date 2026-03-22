@@ -1,12 +1,6 @@
 import { Link } from 'react-router-dom'
 import { btnPrimary, wrap } from '../uiClasses'
 
-const navLinks = [
-  { to: '/#product', label: 'Product' },
-  { to: '/#sessions', label: 'Sessions' },
-  // { to: '/discover', label: 'Get started' },
-] as const
-
 export function SiteShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="relative flex min-h-svh flex-col overflow-x-clip">
@@ -24,23 +18,9 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
             <img
               src="/mindmesh-logo.png"
               alt="MindMesh"
-              className="h-8 w-auto sm:h-9"
+              className="h-18 "
             />
           </Link>
-          <nav className="hidden sm:block" aria-label="Primary">
-            <ul className="m-0 flex list-none flex-wrap justify-center gap-[22px] p-0">
-              {navLinks.map((l) => (
-                <li key={l.to}>
-                  <Link
-                    className="text-sm font-medium text-muted no-underline transition-colors duration-150 hover:text-heading"
-                    to={l.to}
-                  >
-                    {l.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
           <Link
             className={`${btnPrimary} max-[480px]:hidden px-4`}
             to="/discover"
@@ -62,7 +42,7 @@ export function SiteShell({ children }: { children: React.ReactNode }) {
             <img
               src="/mindmesh-logo.png"
               alt="MindMesh"
-              className="h-7 w-auto opacity-95 sm:h-8"
+              className="h-18 "
             />
           </Link>
           <p className="m-0 text-[0.82rem] text-muted">

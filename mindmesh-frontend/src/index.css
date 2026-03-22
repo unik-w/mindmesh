@@ -58,3 +58,22 @@
     height: auto;
   }
 }
+
+@keyframes mm-hero-feed-marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, -50%, 0);
+  }
+}
+
+.mm-hero-feed-track {
+  animation: mm-hero-feed-marquee 48s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mm-hero-feed-track {
+    animation: none;
+  }
+}

@@ -1,4 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
+import { HeroPaperFeedPreview } from '../components/HeroPaperFeedPreview'
 import { SiteShell } from '../components/SiteShell'
 import {
   btnBase,
@@ -9,19 +10,24 @@ import {
 } from '../uiClasses'
 
 const painPoints = [
-  'Signal lost in too many papers',
+  'You keep drowning in PDFs before the right paper finds you',
   'Discovery stops at search',
   'Collaborators and funding are elsewhere',
 ]
 
-const pillars = [
+const pillars: {
+  title: string
+  body: string
+  highlight?: boolean
+}[] = [
+  {
+    title: 'AI that learns you',
+    body: 'Recommendations sharpen from every paper you open, save, and skip—no manual tuning, just a feed that gets sharper as you scroll.',
+    highlight: true,
+  },
   {
     title: 'Social, not siloed',
     body: 'Follow authors, topics, and projects—discussion lives next to the work.',
-  },
-  {
-    title: 'AI that learns you',
-    body: 'Your feed improves from what you read, save, and build in Sessions.',
   },
   {
     title: 'One home base',
@@ -32,7 +38,7 @@ const pillars = [
 const features = [
   {
     title: 'A feed that stays relevant',
-    desc: 'New papers, trending work in your field, conferences, and roles—without the endless query loop.',
+    desc: 'New papers and trending work in your field—plus nearby conference cards and curated roles matched to your interests—without the endless query loop.',
   },
   {
     title: 'A graph for your domain',
@@ -44,7 +50,7 @@ const features = [
   },
   {
     title: 'Room to collaborate',
-    desc: 'Comments, shares, Sessions, and verified sponsorship when you want to go bigger.',
+    desc: 'Comments, shares, project workspaces, and verified sponsorship when you want to go bigger.',
   },
 ]
 
@@ -53,24 +59,6 @@ const sessionBullets = [
   'Collaborators, notes, and comments on papers',
   'Gaps, drafts, and proposals in one workspace',
 ]
-
-const heroSessionFeed = [
-  {
-    title: 'Climate risk & infrastructure',
-    description:
-      'Live papers, flagged gaps, and a shared draft proposal—six people in one thread.',
-  },
-  {
-    title: 'Urban mobility lab',
-    description:
-      'Curated literature that updates as the question shifts, with notes on every paper.',
-  },
-  {
-    title: 'Alignment reading group',
-    description:
-      'Short summaries, open questions, and links out to the next experiments to run.',
-  },
-] as const
 
 export default function HomePage() {
   const navigate = useNavigate()
@@ -82,85 +70,90 @@ export default function HomePage() {
           <div
             className={`${wrap} grid grid-cols-1 items-start gap-10 min-[801px]:grid-cols-[1fr_auto] min-[801px]:gap-x-12 min-[801px]:gap-y-10`}
           >
-            <div>
-              <p
-                className={`mb-3.5 mt-0 text-[0.72rem] font-semibold tracking-[0.14em] uppercase ${gradientText}`}
-              >
-                Research · network · assistant
+            <div className="relative max-w-[min(100%,32rem)] min-[801px]:pt-1">
+              <div
+                className="pointer-events-none absolute -left-6 top-8 hidden h-[min(320px,70%)] w-px bg-linear-to-b from-cyan-400/0 via-cyan-400/35 to-violet-500/0 min-[801px]:block"
+                aria-hidden
+              />
+              <p className="mb-4 mt-0">
+                <span
+                  className={`inline-flex items-center rounded-full border border-violet-200/70 bg-white/90 px-3 py-1.5 text-[0.68rem] font-semibold tracking-[0.12em] uppercase shadow-sm shadow-violet-500/5 ring-1 ring-white/80 backdrop-blur-sm ${gradientText}`}
+                >
+                  Research · network · assistant
+                </span>
               </p>
-              <h1 className="font-display mb-[18px] mt-0 text-[clamp(2.1rem,5vw,2.85rem)] leading-[1.08] font-bold tracking-[-0.035em] text-heading">
-                Less searching.
-                <br />
-                <span className={gradientText}>More discovering.</span>
+              <h1 className="font-display mb-0 mt-0 text-heading">
+                <span className="block text-[clamp(2.1rem,5vw,2.95rem)] leading-[1.06] font-bold tracking-[-0.038em]">
+                  We&apos;re making research{' '}
+                  <span className={gradientText}>addictive</span>
+                  <span className="text-heading">—one scroll at a time.</span>
+                </span>
+                <span className="mt-4 block border-l-2 border-cyan-500/35 pl-4 text-[clamp(1.3rem,2.2vw,1.35rem)] leading-[1.15] font-bold tracking-[-0.028em] text-slate-700">
+                  Less searching.{' '}
+                  <span className={gradientText}>More discovering.</span>
+                </span>
               </h1>
-              <p className="mb-6 mt-0 max-w-lg text-[1.05rem] leading-relaxed text-foreground">
-                MindMesh is the lightweight place where research finds you—feed,
-                people, project workspaces, and AI tuned to how you actually
-                work.
+              <div
+                className="mb-6 mt-7 h-1 w-14 rounded-full bg-linear-to-r from-cyan-500 to-violet-600"
+                aria-hidden
+              />
+              <p className="mb-3 mt-0 text-[1.0625rem] leading-[1.62] text-foreground">
+                Meet like-minded researchers in your lane—then keep the momentum
+                in one feed built for how you actually read.
               </p>
-              <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2">
-                <Link className={btnPrimaryLg} to="/discover">
+              <p className="mb-7 mt-0 text-[1.0625rem] leading-[1.62] text-foreground">
+                Papers and people, plus nearby conference cards and curated
+                roles when they fit your interests.{' '}
+                <span className={`font-semibold ${gradientText}`}>
+                  AI that learns you
+                </span>{' '}
+                from every open, save, and skip—so the next scroll feels
+                personal.
+              </p>
+              <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                <Link className={`${btnPrimaryLg} w-full justify-center sm:w-auto`} to="/discover">
                   Get started
                 </Link>
                 <a
-                  className={`${btnBase} px-2 font-semibold text-violet-600 transition-colors hover:text-violet-800`}
+                  className={`${btnBase} w-full justify-center rounded-full border border-violet-200/90 bg-white/90 px-5 py-3 text-[0.95rem] font-semibold text-violet-700 shadow-sm shadow-slate-200/40 ring-1 ring-white/90 backdrop-blur-sm transition-[color,box-shadow,background-color] duration-200 hover:border-violet-300 hover:bg-violet-50/80 hover:text-violet-900 sm:w-auto`}
                   href="#product"
                 >
                   See how it works →
                 </a>
               </div>
-              <p className="m-0 max-w-104 text-[0.88rem] text-muted">
-                For labs, industry R&D, and investors who want one calm home for
-                discovery.
+              <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.84rem] leading-snug text-muted">
+                <span className="font-medium text-slate-600">Built for</span>
+                <span className="rounded-md bg-slate-100/90 px-2 py-0.5 text-slate-600">
+                  Labs
+                </span>
+                <span className="text-slate-300" aria-hidden>
+                  ·
+                </span>
+                <span className="rounded-md bg-slate-100/90 px-2 py-0.5 text-slate-600">
+                  Industry R&D
+                </span>
+                <span className="text-slate-300" aria-hidden>
+                  ·
+                </span>
+                <span className="rounded-md bg-slate-100/90 px-2 py-0.5 text-slate-600">
+                  Investors
+                </span>
               </p>
             </div>
             <aside
               className="relative m-0 w-full max-w-none min-[801px]:max-w-[380px]"
-              aria-label="Product preview, example sessions feed"
+              aria-label="Preview of the research feed with scrolling sample papers"
             >
               <div
                 className="absolute -inset-px rounded-[1.15rem] bg-linear-to-br from-cyan-400/40 via-blue-500/25 to-violet-500/35 blur-[1px]"
                 aria-hidden="true"
               />
-              <div className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white/95 shadow-xl shadow-violet-500/12 ring-1 ring-white/80 backdrop-blur-sm">
-                <div className="flex items-center gap-2 border-b border-slate-100 bg-linear-to-r from-slate-50/95 to-slate-50/60 px-3 py-2.5">
-                  <div className="flex gap-1.5" aria-hidden="true">
-                    <span className="size-2.5 rounded-full bg-[#ff5f57]/95" />
-                    <span className="size-2.5 rounded-full bg-[#febc2e]/95" />
-                    <span className="size-2.5 rounded-full bg-[#28c840]/95" />
-                  </div>
-                  <span className="ml-1 truncate font-mono text-[11px] font-medium tracking-tight text-slate-500">
-                    mindmesh.app/sessions
-                  </span>
-                  <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold tracking-wide text-emerald-800 uppercase">
-                    <span
-                      className="size-1.5 animate-pulse rounded-full bg-emerald-500"
-                      aria-hidden="true"
-                    />
-                    Live
-                  </span>
-                </div>
-                <div className="relative space-y-2.5 bg-[radial-gradient(ellipse_120%_80%_at_50%_0%,rgba(99,102,241,0.06),transparent_55%)] p-3">
-                  {heroSessionFeed.map((session) => (
-                    <div
-                      key={session.title}
-                      className="rounded-xl border border-slate-100/90 bg-linear-to-br from-white to-slate-50/70 p-3.5 shadow-sm transition-[box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:shadow-md"
-                    >
-                      <p className="font-display text-[0.875rem] leading-snug font-semibold text-heading">
-                        {session.title}
-                      </p>
-                      <p className="mt-2 text-[12px] leading-relaxed text-muted">
-                        {session.description}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <HeroPaperFeedPreview />
             </aside>
           </div>
         </section>
 
-        <section id="problem" className="py-10">
+        {/* <section id="problem" className="py-10">
           <div className={wrap}>
             <h2 className="font-display mb-3 mt-0 text-[clamp(1.35rem,2.5vw,1.65rem)] leading-tight font-semibold tracking-[-0.02em] text-heading">
               Sound familiar?
@@ -176,7 +169,7 @@ export default function HomePage() {
               ))}
             </ul>
           </div>
-        </section>
+        </section> */}
 
         <section className="py-16">
           <div
@@ -185,9 +178,17 @@ export default function HomePage() {
             {pillars.map((p) => (
               <div
                 key={p.title}
-                className="rounded-2xl border border-border/90 bg-surface p-6 shadow-sm transition-shadow duration-200 hover:shadow-md"
+                className={
+                  p.highlight
+                    ? 'rounded-2xl border border-violet-200/85 bg-linear-to-br from-white via-white to-violet-50/45 p-6 shadow-md shadow-violet-500/10 ring-1 ring-violet-100/90 transition-shadow duration-200 hover:shadow-lg'
+                    : 'rounded-2xl border border-border/90 bg-surface p-6 shadow-sm transition-shadow duration-200 hover:shadow-md'
+                }
               >
-                <h3 className="font-display mb-2 mt-0 text-base font-semibold text-heading">
+                <h3
+                  className={`font-display mb-2 mt-0 text-base font-semibold ${
+                    p.highlight ? gradientText : 'text-heading'
+                  }`}
+                >
                   {p.title}
                 </h3>
                 <p className="m-0 text-[0.92rem] leading-normal text-foreground">
@@ -209,7 +210,8 @@ export default function HomePage() {
               </h2>
               <p className="m-0 text-[0.98rem] leading-[1.55] text-foreground">
                 Like a social layer for papers—plus an assistant that learns your
-                domain and your projects.
+                domain and your habits, with curated events and roles when they
+                match where you are.
               </p>
             </header>
             <div className="grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-border/90 bg-border shadow-sm min-[641px]:grid-cols-2">
@@ -305,8 +307,9 @@ export default function HomePage() {
                 Ready when you are
               </h2>
               <p className="mb-[22px] mt-0 text-[0.95rem] leading-[1.55] text-foreground">
-                Tell us what you work on—we will use it to shape your feed and
-                Sessions. Optional: add your email for launch updates.
+                Tell us what you work on—we&apos;ll use it to personalize your
+                feed and recommendations. Optional: add your email for launch
+                updates.
               </p>
               <form
                 className="flex flex-col gap-2.5 text-left"
