@@ -52,11 +52,12 @@ https://mindmesh-0.vercel.app
 
 ## 🧪 How It Works
 
-1. A user submits a research query
-2. Relevant papers are retrieved via the ArXiv API
-3. Results are filtered and structured
-4. LLM processes the content for understanding
-5. A clean, structured response is returned
+1. Research papers are collected from arXiv API and stored
+2. Papers are converted into embeddings and indexed in a vector database
+3. A user submits a research query or opens their personalized feed
+4. Relevant papers are retrieved using semantic search
+5. LLM processes the selected papers for summaries and insights
+6. Clean structured response or feed is shown to the user
 
 ---
 
