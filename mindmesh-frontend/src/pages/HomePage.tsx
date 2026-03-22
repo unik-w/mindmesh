@@ -9,12 +9,6 @@ import {
   wrap,
 } from '../uiClasses'
 
-const painPoints = [
-  'You keep drowning in PDFs before the right paper finds you',
-  'Discovery stops at search',
-  'Collaborators and funding are elsewhere',
-]
-
 const pillars: {
   title: string
   body: string
