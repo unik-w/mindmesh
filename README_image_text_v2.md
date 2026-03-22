@@ -126,8 +126,9 @@ MindMesh is built around a modular pipeline that separates retrieval, processing
 ## 🛠️ Tech Stack
 * **Frontend**: Vite 
 * **Backend**: FastAPI, Hugging Face,Superbase
+* ** AI Tools**: Featherless, Vercel, BeyondPresence, ElevenLabs
 * **Cloud Computing**: AWS
-* **LLM Layer**: LLaMA (configurable)
+* **LLM Model*: LLaMA (configurable)
 * **Data Source**: ArXiv API
 
 
