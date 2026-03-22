@@ -1,6 +1,7 @@
 import type { Session } from '@supabase/supabase-js'
 import {
   authorSearchPreview,
+  citationsForDemoId,
   demoProfile,
   demoSponsoredResearches,
   INTERESTS,
@@ -16,6 +17,11 @@ import {
   ROUTES,
   setApiBearerToken,
 } from './httpClient'
+import {
+  loadWorkspaceSessions,
+  prependWorkspaceSession,
+  updateWorkspaceSession,
+} from './localWorkspaceSessions'
 import { mockStore } from './mockStore'
 import type {
   AuthorSearchHit,
@@ -25,6 +31,7 @@ import type {
   LikeResult,
   PaperSearchHit,
   PdfUploadResult,
+  SessionFeedMoreState,
   SessionSummary,
   SponsorResearch,
   UserProfile,
@@ -162,27 +169,11 @@ function backendPaperToFeedItem(p: BackendPaper): FeedItem {
     aiSummary: summary + simNote,
     stats: { saves: 0, thread: 0 },
     tags,
-    citations: 0,
+    citations: citationsForDemoId(p.id),
     likes: 0,
     comments: 0,
     arxivId: extractArxivId(p),
     paperDetail: summary || undefined,
-  }
-}
-
-function paperSearchHitToFeedItem(h: PaperSearchHit): FeedItem {
-  return {
-    id: h.id,
-    interestIds: [],
-    authorLine: h.authorLine,
-    title: h.title,
-    meta: h.meta,
-    aiSummary: '',
-    stats: { saves: 0, thread: 0 },
-    tags: ['Paper', 'Search'] as const,
-    citations: 0,
-    likes: 0,
-    comments: 0,
   }
 }
 
@@ -408,6 +399,8 @@ export async function getPersistedComments(): Promise<
 }
 
 const FEED_PAGE_SIZE = 6
+const SESSION_FEED_BULK = 24
+const SESSION_PAGE_SIZE = 6
 
 export type FeedSummaryItem = {
   paper_id: string
@@ -518,7 +511,18 @@ export async function listSessions(): Promise<SessionSummary[]> {
     await delay()
     return mockStore.listSessions()
   }
-  return []
+  return loadWorkspaceSessions()
+}
+
+function orderBackendPapersForSeed(
+  papers: BackendPaper[],
+  seedPaperId: string | undefined,
+): BackendPaper[] {
+  if (!seedPaperId) return [...papers]
+  const idx = papers.findIndex((p) => p.id === seedPaperId)
+  if (idx <= 0) return [...papers]
+  const sel = papers[idx]!
+  return [sel, ...papers.filter((_, i) => i !== idx)]
 }
 
 export async function createSession(
@@ -531,32 +535,150 @@ export async function createSession(
   await delay(120)
   const id = `session-${Date.now()}`
   let papers: FeedItem[] = []
+  let moreFeed: SessionFeedMoreState | undefined
   if (input.source === 'paper') {
     const q = input.paperQuery?.trim() ?? ''
+    const seed = input.seedPaperId?.trim()
     if (q) {
-      const hits = await searchPapers(q)
-      papers = hits.slice(0, 6).map(paperSearchHitToFeedItem)
+      const raw = await fetchPaperSearchBackend(q, 0, SESSION_FEED_BULK)
+      cachePapers(raw)
+      const ordered = orderBackendPapersForSeed(raw, seed)
+      const feedFull = ordered.map(backendPaperToFeedItem)
+      papers = feedFull.slice(0, SESSION_PAGE_SIZE)
+      const prefetchQueue = feedFull.slice(SESSION_PAGE_SIZE)
+      const apiExhausted = raw.length < SESSION_FEED_BULK
+      if (prefetchQueue.length > 0 || !apiExhausted) {
+        moreFeed = {
+          q,
+          nextApiOffset: raw.length,
+          pageSize: SESSION_PAGE_SIZE,
+          prefetchQueue,
+          apiExhausted,
+        }
+      }
     }
   }
+  const seedTitle =
+    input.source === 'paper' && papers[0]?.title?.trim()
+      ? papers[0]!.title.trim()
+      : input.paperQuery?.trim() ?? ''
   const title =
     input.title?.trim() ||
-    (input.source === 'paper' && input.paperQuery?.trim()
-      ? `Session · ${input.paperQuery.trim().slice(0, 36)}${input.paperQuery.trim().length > 36 ? '…' : ''}`
+    (input.source === 'paper' && seedTitle
+      ? `Session · ${seedTitle.slice(0, 36)}${seedTitle.length > 36 ? '…' : ''}`
       : input.source === 'pdf'
         ? `PDF · ${(input.fileMeta?.name ?? 'upload').replace(/\.pdf$/i, '').slice(0, 36)}`
         : 'New session')
   const meta = 'You · just now'
-  return { session: { id, title, meta, papers } }
+  const session: SessionSummary = { id, title, meta, papers, moreFeed }
+  prependWorkspaceSession(session)
+  return { session }
 }
 
-export async function getSessionFeed(_sessionId: string): Promise<FeedItem[]> {
+/**
+ * Appends the next page of papers for a session (same /paper/search API + local cursor).
+ * Persists to workspace storage and returns newly added items.
+ */
+export async function loadMoreSessionPapers(
+  sessionId: string,
+  onSummaries?: (summaries: FeedSummaryItem[]) => void,
+): Promise<FeedItem[]> {
+  if (isMockApiMode()) {
+    await delay(140)
+    return mockStore.loadMoreSessionPapers(sessionId)
+  }
+
+  const session = loadWorkspaceSessions().find((s) => s.id === sessionId)
+  if (!session?.moreFeed) return []
+
+  const mf: SessionFeedMoreState = {
+    ...session.moreFeed,
+    prefetchQueue: session.moreFeed.prefetchQueue.map((p) => ({ ...p })),
+  }
+  const seen = new Set(session.papers.map((p) => p.id))
+  const out: FeedItem[] = []
+  const fetchedForSummary: BackendPaper[] = []
+
+  while (out.length < mf.pageSize) {
+    if (mf.prefetchQueue.length > 0) {
+      const p = mf.prefetchQueue.shift()!
+      if (!seen.has(p.id)) {
+        out.push(p)
+        seen.add(p.id)
+      }
+      continue
+    }
+    if (mf.apiExhausted) break
+    const raw = await fetchPaperSearchBackend(
+      mf.q,
+      mf.nextApiOffset,
+      mf.pageSize,
+    )
+    cachePapers(raw)
+    fetchedForSummary.push(...raw)
+    mf.nextApiOffset += mf.pageSize
+    if (raw.length < mf.pageSize) mf.apiExhausted = true
+    if (raw.length === 0) {
+      mf.apiExhausted = true
+      break
+    }
+    for (const bp of raw) {
+      const item = backendPaperToFeedItem(bp)
+      if (seen.has(item.id)) continue
+      if (out.length >= mf.pageSize) {
+        mf.prefetchQueue.push(item)
+      } else {
+        out.push(item)
+        seen.add(item.id)
+      }
+    }
+  }
+
+  if (out.length === 0) {
+    updateWorkspaceSession(sessionId, (s) => ({
+      ...s,
+      moreFeed: undefined,
+    }))
+    return []
+  }
+
+  const outIds = new Set(out.map((p) => p.id))
+  void fetchFeedSummaries(
+    fetchedForSummary.filter((b) => outIds.has(b.id)),
+  ).then((summaries) => {
+    if (summaries.length > 0) onSummaries?.(summaries)
+  })
+
+  const nextMore: SessionFeedMoreState | undefined =
+    mf.prefetchQueue.length > 0 || !mf.apiExhausted
+      ? {
+          q: mf.q,
+          nextApiOffset: mf.nextApiOffset,
+          pageSize: mf.pageSize,
+          prefetchQueue: mf.prefetchQueue,
+          apiExhausted: mf.apiExhausted,
+        }
+      : undefined
+
+  updateWorkspaceSession(sessionId, (s) => ({
+    ...s,
+    papers: [...s.papers, ...out],
+    moreFeed: nextMore,
+  }))
+
+  return out
+}
+
+export async function getSessionFeed(sessionId: string): Promise<FeedItem[]> {
   if (isMockApiMode()) {
     await delay()
-    const feed = mockStore.getSessionFeed(_sessionId)
+    const feed = mockStore.getSessionFeed(sessionId)
     if (!feed) throw new Error('Session not found')
     return feed
   }
-  return []
+  const found = loadWorkspaceSessions().find((s) => s.id === sessionId)
+  if (!found) throw new Error('Session not found')
+  return found.papers.map((p) => ({ ...p }))
 }
 
 export async function joinSession(sessionId: string): Promise<void> {
@@ -660,17 +782,26 @@ export async function getSponsoredResearches(): Promise<SponsorResearch[]> {
   return demoSponsoredResearches.map((r) => ({ ...r }))
 }
 
+async function fetchPaperSearchBackend(
+  query: string,
+  offset = 0,
+  limit = 24,
+): Promise<BackendPaper[]> {
+  const q = encodeURIComponent(query.trim())
+  const papers = await apiFetchJson<BackendPaper[]>(
+    `${ROUTES.paperSearch}?q=${q}&limit=${limit}&offset=${offset}`,
+    { method: 'GET' },
+  )
+  return Array.isArray(papers) ? papers : []
+}
+
 export async function searchPapers(query: string): Promise<PaperSearchHit[]> {
   if (isMockApiMode()) {
     await delay(120)
     return mockStore.searchPapers(query)
   }
-  const q = encodeURIComponent(query.trim())
-  const papers = await apiFetchJson<BackendPaper[]>(
-    `${ROUTES.paperSearch}?q=${q}&limit=24&offset=0`,
-    { method: 'GET' },
-  )
-  if (!Array.isArray(papers)) return []
+  const papers = await fetchPaperSearchBackend(query, 0, 24)
+  cachePapers(papers)
   return papers.map((p) => ({
     id: p.id,
     title: p.title,

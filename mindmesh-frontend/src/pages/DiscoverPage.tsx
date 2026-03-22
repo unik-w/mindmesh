@@ -22,6 +22,7 @@ import {
   joinSession,
   listSessions,
   loadMoreFeedPapers,
+  loadMoreSessionPapers,
   saveInterests,
   searchPapers,
   setCardLike,
@@ -104,6 +105,8 @@ export default function DiscoverPage() {
   const [commentDraftByPost, setCommentDraftByPost] = useState<
     Record<string, string>
   >({})
+  const commentDraftByPostRef = useRef(commentDraftByPost)
+  commentDraftByPostRef.current = commentDraftByPost
   const [commentExtras, setCommentExtras] = useState<
     Record<string, { id: string; author: string; body: string }[]>
   >({})
@@ -120,10 +123,14 @@ export default function DiscoverPage() {
   const [sessionsLoading, setSessionsLoading] = useState(false)
   const [paperHits, setPaperHits] = useState<PaperSearchHit[]>([])
   const [paperSearchLoading, setPaperSearchLoading] = useState(false)
+  const [selectedSeedPaperId, setSelectedSeedPaperId] = useState<string | null>(
+    null,
+  )
 
   const [feedOffset, setFeedOffset] = useState(0)
   const [feedHasMore, setFeedHasMore] = useState(true)
   const [feedLoadingMore, setFeedLoadingMore] = useState(false)
+  const [sessionFeedLoadingMore, setSessionFeedLoadingMore] = useState(false)
 
   const selectedInterestKey = useMemo(
     () => [...selected].sort().join(','),
@@ -230,29 +237,30 @@ export default function DiscoverPage() {
 
   const submitComment = useCallback(
     (postId: string) => {
-      setCommentDraftByPost((draftState) => {
-        const body = (draftState[postId] ?? '').trim()
-        if (!body) return draftState
-        void addCardComment(postId, body, commentAuthorName).then((row) => {
-          setCommentExtras((prev) => ({
-            ...prev,
-            [postId]: [...(prev[postId] ?? []), row],
-          }))
-          setDiscoveryFeedItems((prev) =>
-            prev.map((p) =>
+      const body = (commentDraftByPostRef.current[postId] ?? '').trim()
+      if (!body) return
+      setCommentDraftByPost((draftState) => ({
+        ...draftState,
+        [postId]: '',
+      }))
+      void addCardComment(postId, body, commentAuthorName).then((row) => {
+        setCommentExtras((prev) => ({
+          ...prev,
+          [postId]: [...(prev[postId] ?? []), row],
+        }))
+        setDiscoveryFeedItems((prev) =>
+          prev.map((p) =>
+            p.id === postId ? { ...p, comments: p.comments + 1 } : p,
+          ),
+        )
+        setWorkspaceSessions((prev) =>
+          prev.map((s) => ({
+            ...s,
+            papers: s.papers.map((p) =>
               p.id === postId ? { ...p, comments: p.comments + 1 } : p,
             ),
-          )
-          setWorkspaceSessions((prev) =>
-            prev.map((s) => ({
-              ...s,
-              papers: s.papers.map((p) =>
-                p.id === postId ? { ...p, comments: p.comments + 1 } : p,
-              ),
-            })),
-          )
-        })
-        return { ...draftState, [postId]: '' }
+          })),
+        )
       })
     },
     [commentAuthorName],
@@ -306,6 +314,15 @@ export default function DiscoverPage() {
         return llm ? { ...item, aiSummary: llm } : item
       }),
     )
+    setWorkspaceSessions((prev) =>
+      prev.map((s) => ({
+        ...s,
+        papers: s.papers.map((item) => {
+          const llm = map.get(item.id)
+          return llm ? { ...item, aiSummary: llm } : item
+        }),
+      })),
+    )
   }, [])
 
   const handleContinue = useCallback(async () => {
@@ -318,7 +335,26 @@ export default function DiscoverPage() {
     }
   }, [selected])
 
+  const sessionFeedHasMore = useMemo(() => {
+    if (!activeSessionId) return false
+    const s = workspaceSessions.find((x) => x.id === activeSessionId)
+    return Boolean(s?.moreFeed)
+  }, [activeSessionId, workspaceSessions])
+
   const handleLoadMore = useCallback(async () => {
+    if (activeSessionId) {
+      if (sessionFeedLoadingMore || !sessionFeedHasMore) return
+      setSessionFeedLoadingMore(true)
+      try {
+        await loadMoreSessionPapers(activeSessionId, applySummaries)
+        setWorkspaceSessions(await listSessions())
+      } catch {
+        /* ignore */
+      } finally {
+        setSessionFeedLoadingMore(false)
+      }
+      return
+    }
     if (feedLoadingMore || !feedHasMore) return
     setFeedLoadingMore(true)
     try {
@@ -336,7 +372,15 @@ export default function DiscoverPage() {
     } finally {
       setFeedLoadingMore(false)
     }
-  }, [feedOffset, feedLoadingMore, feedHasMore, applySummaries])
+  }, [
+    activeSessionId,
+    sessionFeedLoadingMore,
+    sessionFeedHasMore,
+    applySummaries,
+    feedOffset,
+    feedLoadingMore,
+    feedHasMore,
+  ])
 
   useEffect(() => {
     if (!supabase) {
@@ -502,6 +546,7 @@ export default function DiscoverPage() {
     setNewSessionStep('choose')
     setPaperQuery('')
     setPaperHits([])
+    setSelectedSeedPaperId(null)
   }, [])
 
   const finishNewSessionFromPaper = useCallback(async () => {
@@ -510,6 +555,7 @@ export default function DiscoverPage() {
         await createSession({
           source: 'paper',
           paperQuery: paperQuery.trim(),
+          seedPaperId: selectedSeedPaperId ?? undefined,
         })
       }
       const list = await listSessions()
@@ -520,7 +566,7 @@ export default function DiscoverPage() {
     closeNewSessionModal()
     setActiveSessionId(null)
     setMainPanel('discover')
-  }, [closeNewSessionModal, newSessionStep, paperQuery])
+  }, [closeNewSessionModal, newSessionStep, paperQuery, selectedSeedPaperId])
 
   useEffect(() => {
     if (newSessionStep !== 'paper' || !newSessionOpen) {
@@ -548,6 +594,13 @@ export default function DiscoverPage() {
       window.clearTimeout(t)
     }
   }, [newSessionOpen, newSessionStep, paperQuery])
+
+  useEffect(() => {
+    if (!selectedSeedPaperId) return
+    if (!paperHits.some((h) => h.id === selectedSeedPaperId)) {
+      setSelectedSeedPaperId(null)
+    }
+  }, [paperHits, selectedSeedPaperId])
 
   const prioritizedFeed = useMemo(() => {
     if (activeSessionId) {
@@ -1033,6 +1086,7 @@ export default function DiscoverPage() {
                   setNewSessionStep('choose')
                   setPaperQuery('')
                   setPaperHits([])
+                  setSelectedSeedPaperId(null)
                 }}
                 className="mb-3 -ml-1 flex items-center gap-1 rounded-lg px-1 py-1 text-[0.8125rem] font-medium text-violet-700 transition-colors hover:bg-violet-50"
               >
@@ -1058,7 +1112,7 @@ export default function DiscoverPage() {
             >
               {newSessionStep === 'choose'
                 ? 'Pick how you want to seed your session—we will build a feed and collaborators around it.'
-                : 'Search by title, DOI, arXiv ID, or keywords.'}
+                : 'Search, tap a paper to anchor the session, then start—the feed grows from that paper.'}
             </p>
           </div>
 
@@ -1126,25 +1180,41 @@ export default function DiscoverPage() {
                   <p className="m-0 text-xs text-slate-500">Searching…</p>
                 ) : null}
                 {paperHits.length > 0 ? (
-                  <ul className="m-0 max-h-40 list-none space-y-1.5 overflow-y-auto p-0 [scrollbar-width:thin]">
-                    {paperHits.map((h) => (
-                      <li
-                        key={h.id}
-                        className="rounded-lg border border-slate-200/80 bg-slate-50/80 px-3 py-2 text-left"
-                      >
-                        <p className="m-0 text-xs font-semibold text-slate-900 line-clamp-2">
-                          {h.title}
-                        </p>
-                        <p className="mt-0.5 mb-0 text-[0.65rem] text-slate-500 line-clamp-1">
-                          {h.authorLine} · {h.meta}
-                        </p>
-                      </li>
-                    ))}
+                  <ul className="m-0 max-h-48 list-none space-y-1.5 overflow-y-auto p-0 [scrollbar-width:thin]">
+                    {paperHits.map((h) => {
+                      const selected = selectedSeedPaperId === h.id
+                      return (
+                        <li key={h.id}>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedSeedPaperId(h.id)}
+                            aria-pressed={selected}
+                            className={`w-full rounded-lg border px-3 py-2 text-left transition-colors ${
+                              selected
+                                ? 'border-violet-500 bg-violet-50/90 ring-2 ring-violet-400/50'
+                                : 'border-slate-200/80 bg-slate-50/80 hover:border-violet-200 hover:bg-white'
+                            }`}
+                          >
+                            <p className="m-0 text-xs font-semibold text-slate-900 line-clamp-2">
+                              {h.title}
+                            </p>
+                            <p className="mt-0.5 mb-0 text-[0.65rem] text-slate-500 line-clamp-1">
+                              {h.authorLine} · {h.meta}
+                            </p>
+                          </button>
+                        </li>
+                      )
+                    })}
                   </ul>
                 ) : null}
                 <button
                   type="button"
-                  disabled={!paperQuery.trim()}
+                  disabled={
+                    !paperQuery.trim() ||
+                    paperSearchLoading ||
+                    paperHits.length === 0 ||
+                    selectedSeedPaperId === null
+                  }
                   onClick={() => void finishNewSessionFromPaper()}
                   className={`${btnPrimary} w-full justify-center py-2.5 disabled:pointer-events-none disabled:opacity-40`}
                 >
@@ -1504,8 +1574,14 @@ export default function DiscoverPage() {
                         handleCardMainClick={handleCardMainClick}
                         onOpenPaperVideo={openPaperVideo}
                         onLoadMore={handleLoadMore}
-                        loadingMore={feedLoadingMore}
-                        hasMore={feedHasMore}
+                        loadingMore={
+                          activeSessionId
+                            ? sessionFeedLoadingMore
+                            : feedLoadingMore
+                        }
+                        hasMore={
+                          activeSessionId ? sessionFeedHasMore : feedHasMore
+                        }
                       />
                     </div>
                   ) : null}

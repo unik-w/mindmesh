@@ -14,6 +14,7 @@ import type {
   LikeResult,
   PaperSearchHit,
   PdfUploadResult,
+  SessionFeedMoreState,
   SessionSummary,
   SponsorResearch,
 } from './types'
@@ -39,12 +40,19 @@ function cloneItem(item: FeedItem): FeedItem {
 }
 
 function cloneSession(s: SessionSummary): SessionSummary {
-  return {
+  const out: SessionSummary = {
     id: s.id,
     title: s.title,
     meta: s.meta,
     papers: s.papers.map(cloneItem),
   }
+  if (s.moreFeed) {
+    out.moreFeed = {
+      ...s.moreFeed,
+      prefetchQueue: s.moreFeed.prefetchQueue.map(cloneItem),
+    }
+  }
+  return out
 }
 
 function seedState(): Persisted {
@@ -256,34 +264,81 @@ export const mockStore = {
     let papers: FeedItem[]
     let title: string
     let meta: string
+    let moreFeed: SessionFeedMoreState | undefined
 
     if (input.source === 'paper') {
       const q = (input.paperQuery ?? '').trim()
-      const hits = searchPapersInternal(q)
+      const seedId = input.seedPaperId?.trim()
+      const rawHits = searchPapersInternal(q)
+      const seedIdx =
+        seedId && rawHits.length > 0
+          ? rawHits.findIndex((h) => h.id === seedId)
+          : -1
+      const hits =
+        seedIdx > 0
+          ? [
+              rawHits[seedIdx]!,
+              ...rawHits.filter((_, i) => i !== seedIdx),
+            ]
+          : rawHits
       const pool = allFeedItemsPool()
-      const pick =
-        hits.length > 0
-          ? pool.find((p) => p.id === hits[0]!.id)
-          : feedItems[0]
-      const base = pick ? cloneItem(pick) : cloneItem(feedItems[0]!)
-      papers = [
-        {
-          ...base,
-          id: `${id}-p1`,
-          title: q
-            ? `${base.title} · “${q.slice(0, 40)}${q.length > 40 ? '…' : ''}”`
-            : base.title,
-        },
-        ...feedItems.slice(1, 4).map((p, i) => ({
-          ...cloneItem(p),
-          id: `${id}-seed-${i}`,
-        })),
-      ]
-      title =
-        input.title?.trim() ||
-        (q
-          ? `Session · ${q.slice(0, 32)}${q.length > 32 ? '…' : ''}`
-          : 'New paper session')
+      if (hits.length > 0) {
+        papers = hits.slice(0, 6).map((h, i) => {
+          const raw = pool.find((p) => p.id === h.id) ?? feedItems[0]!
+          return {
+            ...cloneItem(raw),
+            id: `${id}-hit-${i}`,
+            title: h.title,
+            authorLine: h.authorLine,
+            meta: h.meta,
+          }
+        })
+        const extra = feedItems
+          .filter((p) => !papers.some((pp) => pp.title === p.title))
+          .slice(0, 12)
+          .map((p, i) => ({
+            ...cloneItem(p),
+            id: `${id}-more-${i}`,
+          }))
+        moreFeed =
+          extra.length > 0
+            ? {
+                q: '',
+                nextApiOffset: 0,
+                pageSize: 6,
+                prefetchQueue: extra.map(cloneItem),
+                apiExhausted: true,
+              }
+            : undefined
+        const seedTitle = papers[0]?.title?.trim() ?? q
+        title =
+          input.title?.trim() ||
+          (seedTitle
+            ? `Session · ${seedTitle.slice(0, 32)}${seedTitle.length > 32 ? '…' : ''}`
+            : 'New paper session')
+      } else {
+        const pick = pool.find((p) => p.id === seedId) ?? feedItems[0]
+        const base = pick ? cloneItem(pick) : cloneItem(feedItems[0]!)
+        papers = [
+          {
+            ...base,
+            id: `${id}-p1`,
+            title: q
+              ? `${base.title} · “${q.slice(0, 40)}${q.length > 40 ? '…' : ''}”`
+              : base.title,
+          },
+          ...feedItems.slice(1, 4).map((p, i) => ({
+            ...cloneItem(p),
+            id: `${id}-seed-${i}`,
+          })),
+        ]
+        title =
+          input.title?.trim() ||
+          (q
+            ? `Session · ${q.slice(0, 32)}${q.length > 32 ? '…' : ''}`
+            : 'New paper session')
+        moreFeed = undefined
+      }
       meta = 'You · just now'
     } else {
       const name = input.fileMeta?.name ?? 'upload.pdf'
@@ -298,10 +353,25 @@ export const mockStore = {
       meta = 'You · uploaded'
     }
 
-    const session: SessionSummary = { id, title, meta, papers }
+    const session: SessionSummary = { id, title, meta, papers, moreFeed }
     mem.sessions = [session, ...mem.sessions]
     persist()
     return { session: cloneSession(session) }
+  },
+
+  loadMoreSessionPapers(sessionId: string): FeedItem[] {
+    const s = mem.sessions.find((x) => x.id === sessionId)
+    if (!s?.moreFeed) return []
+    const mf = s.moreFeed
+    const take = mf.prefetchQueue.slice(0, mf.pageSize)
+    const rest = mf.prefetchQueue.slice(mf.pageSize)
+    s.papers = [...s.papers, ...take.map(cloneItem)]
+    s.moreFeed =
+      rest.length > 0
+        ? { ...mf, prefetchQueue: rest.map(cloneItem) }
+        : undefined
+    persist()
+    return take.map((p) => applyOverlays(cloneItem(p)))
   },
 
   uploadPdf(file: File): PdfUploadResult {
