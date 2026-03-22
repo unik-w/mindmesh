@@ -75,23 +75,48 @@ def _upsert_papers(papers: list[dict[str, Any]]) -> None:
         deps.db.table("papers").upsert(rows).execute()
 
 
+def _extract_arxiv_id(q: str) -> str | None:
+    """Extract arXiv ID from a URL, DOI, or bare ID."""
+    import re
+    # URL: https://arxiv.org/abs/2301.01234
+    m = re.search(r"arxiv\.org/(?:abs|pdf)/(\d+\.\d+)", q)
+    if m:
+        return m.group(1)
+    # DOI: 10.48550/arXiv.2509.24857
+    m = re.search(r"arXiv\.(\d+\.\d+)", q, re.IGNORECASE)
+    if m:
+        return m.group(1)
+    # Bare ID: 2301.01234 or 2301.01234v2
+    if re.match(r"^\d{4}\.\d{4,5}(v\d+)?$", q):
+        return q
+    return None
+
+
 @router.get("/search")
 def search_arxiv(
-    q: str = Query(..., min_length=1, description="Search query (searches all fields)"),
+    q: str = Query(..., min_length=1, description="Search query, arXiv URL, or arXiv ID"),
     start: int = Query(0, ge=0, description="Pagination offset"),
     max_results: int = Query(20, ge=1, le=100, description="Number of results"),
     _user: dict = Depends(deps.get_current_user),
 ):
+    arxiv_id = _extract_arxiv_id(q)
+    if arxiv_id:
+        search_query = f"id:{arxiv_id}"
+        params = {"search_query": search_query, "start": 0, "max_results": 1}
+    else:
+        search_query = f"all:{q}"
+        params = {
+            "search_query": search_query,
+            "start": start,
+            "max_results": max_results,
+            "sortBy": "relevance",
+            "sortOrder": "descending",
+        }
+
     try:
         resp = requests.get(
             ARXIV_API,
-            params={
-                "search_query": f"all:{q}",
-                "start": start,
-                "max_results": max_results,
-                "sortBy": "relevance",
-                "sortOrder": "descending",
-            },
+            params=params,
             headers={"User-Agent": "mindmesh/1"},
             timeout=120,
         )
@@ -99,7 +124,12 @@ def search_arxiv(
     except requests.Timeout:
         raise HTTPException(504, "arXiv API timed out — try again")
     except requests.RequestException as e:
+        log.error("arXiv request failed: %s", e)
         raise HTTPException(502, f"arXiv API error: {e}")
+
+    if resp.status_code != 200:
+        log.error("arXiv returned %s: %s", resp.status_code, resp.text[:500])
+        raise HTTPException(502, f"arXiv returned status {resp.status_code}")
 
     data = _parse_feed(resp.text)
     _upsert_papers(data.get("papers", []))

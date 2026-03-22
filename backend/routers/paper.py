@@ -33,20 +33,33 @@ def _compute_embedding(title: str, summary: str | None) -> list[float]:
     return out.last_hidden_state[:, 0, :].float().cpu()[0].tolist()
 
 
+def _is_doi_or_url(q: str) -> bool:
+    return q.startswith("10.") or q.startswith("http://") or q.startswith("https://")
+
+
 @router.get("/search")
 def search_papers(
-    q: str = Query(..., min_length=1, description="Search query"),
+    q: str = Query(..., min_length=1, description="Search query, DOI, or URL"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
-    result = (
-        deps.db.table("papers")
-        .select("id, title, summary, authors, categories, links, published")
-        .or_(f"title.ilike.%{q}%,summary.ilike.%{q}%,authors.cs.[\"{q}\"]")
-        .order("published", desc=True)
-        .range(offset, offset + limit - 1)
-        .execute()
-    )
+    if _is_doi_or_url(q):
+        result = (
+            deps.db.table("papers")
+            .select("id, title, summary, authors, categories, links, published")
+            .or_(f"id.eq.{q},links.cs.{q}")
+            .range(offset, offset + limit - 1)
+            .execute()
+        )
+    else:
+        result = (
+            deps.db.table("papers")
+            .select("id, title, summary, authors, categories, links, published")
+            .or_(f"title.ilike.%{q}%,summary.ilike.%{q}%,authors.cs.[\"{q}\"]")
+            .order("published", desc=True)
+            .range(offset, offset + limit - 1)
+            .execute()
+        )
     return result.data
 
 
