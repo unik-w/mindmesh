@@ -128,7 +128,7 @@ async def _summarize_one_paper(
                 {"role": "user", "content": prompt},
             ],
             temperature=0.4,
-            max_tokens=200,
+            max_completion_tokens=200,
         )
         text = (completion.choices[0].message.content or "").strip()
         return PaperSummaryItem(
@@ -335,7 +335,7 @@ async def analyze_pdf(
                 {"role": "user", "content": prompt},
             ],
             temperature=0.5,
-            max_tokens=2000,
+            max_completion_tokens=2000,
         )
         raw = (completion.choices[0].message.content or "").strip()
     except Exception as exc:
